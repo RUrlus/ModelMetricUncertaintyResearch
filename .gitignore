@@ -127,3 +127,29 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# exclude data
+*.ft
+*.pkl
+*.npy
+*.csv
+*.aux
+*.out
+*.txt
+
+# plots
+*.jpg
+*.jpeg
+*.png
+
+# LateX related files
+*.bbl
+*.bcf
+*.blg
+*.xml
+
+# powerpoints
+*.pptx
+
+# exclude version file
+*version.py
