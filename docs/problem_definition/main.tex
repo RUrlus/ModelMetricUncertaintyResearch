@@ -1,0 +1,129 @@
+\documentclass[paper=a4, fontsize=12pt]{scrartcl}
+\usepackage{multicol}
+\usepackage[T1]{fontenc} % Use 8-bit encoding that has 256 glyphs
+\usepackage{graphicx}
+\usepackage[titletoc,toc,title]{appendix}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage[english]{babel} % English language/hyphenation
+\usepackage{amsmath,amsfonts,amsthm,amssymb} % Math packages
+\usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
+\usepackage{booktabs}
+\usepackage[backend=biber]{biblatex}
+\usepackage{color,soul}
+\usepackage{sectsty} % Allows customizing section commands
+\usepackage{cancel}
+\usepackage{commath}
+\allsectionsfont{\centering \normalfont\scshape} % Make all sections centred, the default font and small caps
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{geometry}
+\usepackage{multirow,array}
+\usepackage[parfill]{parskip}
+\usepackage[font=small]{caption}
+
+\numberwithin{equation}{section} % Number equations within sections (i.e. 1.1, 1.2, 2.1, 2.2 instead of 1, 2, 3, 4)
+\numberwithin{figure}{section} % Number figures within sections (i.e. 1.1, 1.2, 2.1, 2.2 instead of 1, 2, 3, 4)
+\numberwithin{table}{section} % Number tables within sections (i.e. 1.1, 1.2, 2.1, 2.2 instead of 1, 2, 3, 4)
+
+\setlength\parindent{0pt} % Removes all indentation from paragraphs - comment this line for an assignment with lots of text
+\newcommand\blfootnote[1]{%
+  \begingroup
+  \renewcommand\thefootnote{}\footnote{#1}%
+  \addtocounter{footnote}{-1}%
+  \endgroup
+}
+% Custom shortcuts
+\def\bsq#1{%both single quotes
+  \lq{#1}\rq}
+
+\usepackage{fancyhdr} % Custom headers and footers
+\pagestyle{fancy} % Makes all pages in the document conform to the custom headers and footers
+\fancyhead[L]{R. Urlus -- \today} % No page header - if you want one, create it in the same way as the footers below
+\fancyhead[R]{Model Metric Uncertainty} % No page header - if you want one, create it in the same way as the footers below
+\fancyfoot[L]{} % Empty left footer
+\fancyfoot[C]{} % Empty center footer
+\fancyfoot[R]{\thepage} % Page numbering for right footer
+\renewcommand{\footrulewidth}{0pt} % Remove footer underlines
+\setlength{\headheight}{13.6pt} % Customize the height of the header
+\renewcommand{\headrulewidth}{0.4pt}% Default \headrulewidth is 0.4pt
+\thispagestyle{fancy}
+
+\addbibresource{ref.bib}
+
+\begin{document}
+
+\subsubsection*{Problem statement}
+In a binary classification setting we often associate different cost with different types of errors. For example, in a medical setting you don't want wrongly tell a patient that the have a disease when they don't. But you rather make this error than say they don't have a disease when they do.
+In other words, you want to maximise the specificity, recall on the negative class, for an almost sure sensitivity, recall on the positive class. 
+The above utility function can be optimized for any model that outputs a probability using the classification threshold.
+However, in order to pick the optimal classification threshold for out-of-sample data we need to consider the uncertainty on the metrics given the training-test run(s).
+Resulting in the problem statement: \textit{determine the optimal classification threshold that maximises some utility function over a pair of classification metrics considering their simultaneous uncertainty.}
+A secondary problem would be the separation of the data and model driven uncertainty, i.e.\ \textit{how can we estimate the moments of the model and data driven error distributions.}
+
+\subsubsection*{Setting}
+Assume we have a classification problem with feature set $X \subset \mathbb{R}^{N \mathrm{x} K}$ and labels $y = \{y_{i} \in \{0, 1\} \mid 1 \leq  i \leq N\}$.
+Let $T_{m} \subset X$ be the train set and $Z_{m} \subset X$ be the test set for run $ m \in \mathbb{M};~\mathbb{M} = \{1, \ldots, M\}$.
+Additionally let $T_{m} \cap Z_{m} = \emptyset~\forall~m \in \mathbb{M}$ and $T_{i} \cap Z_{j} \not\equiv \emptyset~\forall~i, j \in \mathbb{M}$ where $a \not\equiv b$ denotes $a$ \textit{is not necessarily equal to} $b$.
+Let $f_{m}:\mathbf{x} \to [0, 1]$ represent one of the $M$ model instances trained on $T_{m}$ with hyper-parameters $\Theta_{m}$ and evaluated on $Z_{m}$.
+Furthermore, assume that $f$ is not deterministic given the same training data, $f_{i}(T_{m}, \Theta_{m}) \not\equiv f_{j}(T_{m}, \Theta_{m})~\forall~i, j \in \mathbb{M}$.
+Similarly, assume that not all observations are equivalently easy to predict, $\exists~i, j \in N~|~i \neq j \text{ s.t. } P\left(y_{i} = f_{m}(X_{i})\right) > P\left(y_{j} = f_{m}(X_{j})\right)$.
+\par
+Under the above conditions there is uncertainty on the model performance metrics such as recall ($r$) and precision ($p$).
+This uncertainty is partially driven by the variation between observations sampled from the data generating process (DGP) but also the stochastic element of the training, e.g.\ the initialisation of the weights.
+Hence we observe an estimate of the population metric $\phi$:
+\begin{equation*}
+    \hat{\phi} = \phi + \epsilon = \phi + \epsilon_{X} + \epsilon_{f} = \phi + \epsilon_{T} + \epsilon_{Z} + \epsilon_{f}
+\end{equation*}
+where $\epsilon_{X}$ represents the error induced by the data sample, $\epsilon_{f}$ the error due to non-deterministic behaviour during training and $\epsilon_{T},~\epsilon_{Z}$ are subcomponents of the data driven uncertainty in the form of the training and test set.
+Let $\mathbf{r_{c}}=\{r_{i, c}\in [0, 1] \mid 1 \leq i \leq M\}$ denote the set of observed recalls at classification threshold $c \in [0, 1]$.
+Similarly, $\mathbf{p_{c}}=\{p_{i, c}\in [0, 1] \mid 1 \leq i \leq M\}$ for the precision.
+\par
+When selecting the classification threshold, $c$ that optimizes some utility function $U$, one should consider the uncertainty on the performance metrics.
+For example, say our utility function is to maximise the specificity, recall on the negative class, for an almost sure sensitivity, recall on the positive class, of at least 95\%, i.e.\ $max~r_{\mathrm{neg}} \textrm{ while } P\left(r_{\mathrm{pos}} \geq 0.95\right) \geq 0.99$.
+\par
+In order to determine the optimal classification threshold one needs to consider the joint distribution of $\mathbf{r}_{c}$ and $\mathbf{p}_{c}$ as they are not independent.
+Both metrics are computed from the confusion matrix, $\mathrm{CM}_{c, m} \sim \mathrm{Multinomial}\left(\theta_{c, m}, H_{m}\right)$ where $H_{m} = |Z_{m}|$.
+Similar considerations exist for other metrics computed on the entries of the confusion matrix.
+
+Resulting in the problem formulation:
+\begin{equation*}
+    \textrm{max}~U(\hat{r}, \hat{p}~|~X, f) \textrm{ given that } \hat{r} \not\!\perp\!\!\!\perp \hat{p}
+\end{equation*}
+% \newpage
+% \subsubsection*{Approaches in literature}
+% 
+% \small{\textsc{Bootstrapping}}\\
+% The standard approach from a frequentist perspective is bootstrapping the test set, yielding multiple realisations of the confusion matrix and thus model metrics.
+% Bootstrapping is most commonly used to compute intervals for a single train-test run.
+% However, multiple runs could be incorporated by bootstrapping the combined test sets, making sure to match the corresponding probability/prediction and label.
+% To obtain confidence intervals one can compute the percentiles for the metrics.
+% Note that the test set must be sufficiently large and bootstrapped sufficiently many times to obtain the desired robustness.
+% Although this approach yields a confusion matrix per bootstrap taking the percentiles does not allow the creation of a two-dimensional interval and as such does not not account for the dependency between the metrics.
+% Bootstrapping a single run is similar to the marginal probabilistic approach, bootstrapping over multiple runs approximates the probabilistic model of the confusion matrix.
+% Multiple bootstrapping strategies that reduce bias in classification settings have been suggested, i.e.\ bootstrap .632~\cite{efron1983estimating} and the .632+ estimators~\cite{efron1997improvements}.
+% \par
+% \small{\textsc{Beta-Bernoulli -- Marginal probabilistic approach}}\\
+% From a Bayesian perspective the marginal model metrics can be described as a Beta-Bernoulli where the Beta is parametrised by the relevant entries of the confusion matrix~\cite{goutte2005probabilistic}.
+% In the case of recall by, respectively, the true positive and false negative counts and a prior, i.e.\ $r \sim \mathrm{Beta}\left(\mathrm{TP} + \lambda, \mathrm{FN} + \lambda \right)$ where $\lambda \in \mathbb{R}_{+}$.
+% A common prior is the Laplace prior ($\lambda = 1$) or Jeffry's prior ($\lambda = 0.5$).
+% It should be noted that a flat prior on the Beta does not give a flat prior on the metric.
+% Multiple runs can be incorporated by summing the entries of the CM over the runs.
+% A downside of this approach is that the Beta-Bernoulli only considers the marginal distribution for a metric.
+% \par
+% \small{\textsc{Dirichlet-Multinomial -- Joint probabilistic approach}}\\
+% A generalisation of the Beta-Bernoulli model for a single metric is the Dirichlet-Multinomial model of the confusion matrix~\cite{totsch2021classifier}:
+% \begin{align*}
+%     \theta &\sim \mathrm{Dirichlet}\left(\lambda \right)\\
+%     \mathrm{CM} &\sim \mathrm{Multinomial}\left(\theta, H\right)
+% \end{align*}
+% Again, the Laplace and Jeffry's prior are common uninformative prior choices.
+% The posterior is estimated over the confusion matrices of the various runs.
+% Predictive samples can be draw from the posterior to estimate credible intervals for the metrics based on the CM.
+% This approach is the Bayesian equivalent of bootstrapping over multiple runs and suffers from the same issue that the credible intervals cannot express the two-dimensional uncertainty on the metrics.
+% 
+% \subsubsection*{Potential approaches}
+% \newpage
+% \printbibliography
+\end{document}
