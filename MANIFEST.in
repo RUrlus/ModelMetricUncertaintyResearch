@@ -1,7 +1,8 @@
 include NOTICE
 include LICENSE
-
+recursive-include mmu *.stan
 global-include README.md
+
 exclude docs tests .readthedocs.yml
 recursive-exclude tests *.py
 recursive-exclude docs *
