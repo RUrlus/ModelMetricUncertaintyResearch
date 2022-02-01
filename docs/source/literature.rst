@@ -20,6 +20,34 @@ Papers
     
     ...
 
+Approximate statistical tests for comparing supervised classification learning algorithms
+-----------------------------------------------------------------------------------------
+- Dietterich, 1998 :cite:p:`dietterich1998`
+- `PDF <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.37.3325&rep=rep1&type=pdf>`_
+
+**Abstract**
+
+*This article reviews five approximate statistical tests for determining whether one learning algorithm outperforms another on a particular learning task. These test sare compared experimentally to determine their probability of incorrectly detecting a difference when no difference exists (type I error). Two widely used statistical tests are shown to have high probability of type I error in certain situations and should never be used: a test for the difference of two proportions and a paired-differences t test based on taking several random train-test splits. A third test, a paired-differences t test based on 10-fold cross-validation, exhibits somewhat elevated probability of type I error. A fourth test, McNemar's test, is shown to have low type I error. The fifth test is a new test, 5x2 cv, based on five iterations of twofold cross-validation. Experiments show that this test also has acceptable type I error. The article also measures the power (ability to detect algorithm differences when they do exist) of these tests. The cross-validated t test is the most powerful. The 5x2 cv test is shown to be slightly more powerful than McNemar's test. The choice of the best test is determined by the computational cost of running the learning algorithm. For algorithms that can be executed only once, Mc-Nemar's test is the only test with acceptable type I error. For algorithms that can be executed 10 times, the 5x2 cv test is recommended, because it is slightly more powerful and because it directly measures variation due to the choice of training set.*
+
+**Notes**
+
+...
+
+The design and analysis of benchmark experiments
+------------------------------------------------
+- Hothorn, 2005 :cite:p:`hothorn2005`
+- `PDF <https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.89.4724&rep=rep1&type=pdf>`_
+
+**Abstract**
+
+*The assessment of the performance of learners by means of benchmark experiments is an established exercise. In practice, benchmark studies are a tool to compare the performance of several competing algorithms for a certain learning problem. Cross-validation or resampling techniques are commonly used to derive point estimates of the performances which are com- pared to identify algorithms with good properties. For several benchmarking problems, test procedures taking the variability of those point estimates into account have been suggested. Most of the recently proposed inference procedures are based on special variance estimators for the cross-validated performance.
+We introduce a theoretical framework for inference problems in benchmark experiments and show that standard statistical test procedures can be used to test for differences in the performances. The theory is based on well defined distributions of performance measures which can be compared with established tests. To demonstrate the usefulness in practice, the theoretical results are applied to regression and classification benchmark studies based on artificial and real world data.*
+
+**Notes**
+
+...
+
+
 Accounting for Variance in Machine Learning Benchmarks
 ------------------------------------------------------
 - Bouthillier, 2021 :cite:p:`bouthillier2021`

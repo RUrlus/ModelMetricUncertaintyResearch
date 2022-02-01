@@ -1,8 +1,8 @@
 ========================================
 MMUR - Model Metric Uncertainty Research
 ========================================
-*MMUR is a library for the research and development around
-`Model Metric Uncertainty <https://github.com/RUrlus/ModelMetricUncertainty>`_*.
+*MMUR is a repository for the research and development around the*
+`Model Metric Uncertainty <https://github.com/RUrlus/ModelMetricUncertainty>`_ *library.*
 
 .. only: not latex
     Contents:
@@ -13,14 +13,15 @@ MMUR - Model Metric Uncertainty Research
     introduction
 
 .. toctree::
-    :caption: Literature
-    :maxdepth: 2
-
-    literature
-
-.. toctree::
     :caption: Research
     :maxdepth: 2
 
     approaches
     findings
+
+.. toctree::
+    :caption: Literature
+    :maxdepth: 1
+
+    literature
+
