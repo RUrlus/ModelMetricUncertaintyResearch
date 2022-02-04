@@ -1,6 +1,6 @@
 include NOTICE
 include LICENSE
-recursive-include mmu *.stan
+recursive-include mmur/stan *.stan
 global-include README.md
 
 exclude docs tests .readthedocs.yml
