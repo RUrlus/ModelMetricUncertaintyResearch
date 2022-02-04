@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.utils import check_array
 
-from mmu.commons import _set_plot_style
+from mmur.viz import _set_plot_style
 from mmu.metrics import confusion_matrix_proba
 from mmu.metrics import binary_metrics_runs
 from mmu.metrics import binary_metrics_confusion

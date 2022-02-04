@@ -1,6 +1,6 @@
 import numpy as np
-from mmu.models.base import ConfusionMatrixBase
-from mmu.stan import _bnn_code
+from mmur.models.base import ConfusionMatrixBase
+from mmur.stan import _bnn_code
 
 
 class BetaBinomialConfusionMatrix(ConfusionMatrixBase):
