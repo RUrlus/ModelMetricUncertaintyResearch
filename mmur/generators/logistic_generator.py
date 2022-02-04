@@ -4,27 +4,26 @@ from scipy.special import expit
 from scipy.special import erfinv
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
+from collections import namedtuple
 
 
 class LogisticGenerator:
-    """Generates binary classification models based on LogisticRegression.
+    """Generates LogisticRegression model with holdout sets.
 
-    Parameters
-    ----------
+    The data is generated from a Logistic process
 
-    We use the same X; y for the test set
+    X ~ Uniform(-10, 10) with an intercept
+    L = X.dot(betas)
+    L_noisy = L + e where e ~ Normal(0, noise_sigma)
+    where e = 0 when noise_sigma is None
+    P = sigmoid(L_noisy)
+    y ~ Bernoulli(P)
 
     """
 
-    def __init__(
-        self,
-        betas=None,
-        noise_sigma=1.0,
-    ):
+    def __init__(self):
         """Initialise the class."""
-        # statefull random number generator
-        self.betas = betas or np.array((0.5, 1.2))
-        self.noise_sigma = noise_sigma
+        self._betas = np.array((0.5, 1.2))
 
     def fit_transform(
         self,
@@ -34,12 +33,59 @@ class LogisticGenerator:
         n_sets=10000,
         betas=None,
         noise_sigma=None,
-        enable_noise=False,
         random_state=None,
+        n_jobs=-1,
     ):
-        """Generate binary classification models."""
-        betas = betas or self.betas
-        noise_sigma = noise_sigma or self.noise_sigma
+        """Generate observations from a Logistic process and fit and predict
+        a LogisticRegression model on it.
+
+        The data is generated from a Logistic process
+
+        X ~ Uniform(-10, 10) with an intercept
+        L = X.dot(betas)
+        L_noisy = L + e where e ~ Normal(0, noise_sigma)
+        where e = 0 when noise_sigma is None
+        P = sigmoid(L_noisy)
+        y ~ Bernoulli(P)
+
+        Parameters
+        ----------
+        train_samples : int, default=10000
+            number of observations in the training set used to train
+            a LogisticRegression
+        test_samples : int, default=10000
+            number of observations in the test set for which to run
+            predictions using the trained LogisticRegression
+        holdout_samples : int, default=10000
+            number of observations in the holdout sets
+        n_sets : int, default=10000
+            number of holdout sets each containing ``holdout_samples``,
+            ``holdout['y']`` will be of shape (holdout_samples, n_sets)
+        betas : tuple[float], default=None
+            Beta coefficients used to generate the data
+        noise_sigma : float, default=None
+            std. dev of the Normally distributed noise added to the linear
+            estimates
+        random_state : int, np.random.default_rng, default=None
+            seed for the random state
+        n_jobs : int, default=-1
+            number of processes used to fit the LogisticRegression
+
+        Returns
+        -------
+        dict[str, dict]
+            returns a dictionary containing four dictionaries:
+                * 'ground_truth' which contains the ground truth probabilities
+                for train, test and holdout.
+                * 'train' which contains the labels `y`, probabilities `proba`
+                and `X`
+                * 'test' which contains the labels `y`, probabilities `proba`
+                and `X`
+                * 'holdout' which contains the labels `y`, probabilities `proba`
+                and `X`
+
+        """
+        betas = betas or self._betas
 
         # ensure consistent behaviour for samples
         self._gen = np.random.default_rng(random_state)
@@ -66,18 +112,13 @@ class LogisticGenerator:
         linear_estimates = X.dot(betas)
 
         # the ground truth probability
-        gt_proba = expit(linear_estimates)
-        gt_proba_train = gt_proba[:n_train].copy()
-        gt_proba_test = gt_proba[n_train:test_idx].copy()
-        gt_proba_holdout = gt_proba[test_idx:].copy()
-        del gt_proba
+        gt_proba_train = expit(linear_estimates[:n_train])
+        gt_proba_test = expit(linear_estimates[n_train:test_idx])
+        gt_proba_holdout = expit(linear_estimates[test_idx:])
 
         # add gaussian noise to the samples
-        if enable_noise:
-            self._with_noise_sigma = noise_sigma
+        if noise_sigma is not None:
             linear_estimates += self._gen.normal(0, noise_sigma, t_samples)
-        else:
-            self._with_noise_sigma = None
 
         # compute probabilities
         proba = expit(linear_estimates)
@@ -95,7 +136,7 @@ class LogisticGenerator:
         del y
 
         # train the LogisticRegression
-        model = LogisticRegression(penalty='none')
+        model = LogisticRegression(penalty='none', n_jobs=-1)
         self.fit_ = model.fit(X_train, y_train.flatten())
         proba_train = self.fit_.predict_proba(X_train)[:, 1][:, None]
         proba_test = self.fit_.predict_proba(X_test)[:, 1][:, None]
