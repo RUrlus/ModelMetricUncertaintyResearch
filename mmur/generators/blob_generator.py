@@ -20,23 +20,24 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.utils import check_array, check_random_state
 from sklearn.utils import shuffle as util_shuffle
 from sklearn.utils.random import sample_without_replacement
+from sklearn.model_selection import train_test_split
 
 
 
-def _generate_hypercube(samples, dimensions, rng):
-    """Returns distinct binary samples of length dimensions."""
-    if dimensions > 30:
-        return np.hstack(
-            [
-                rng.randint(2, size=(samples, dimensions - 30)),
-                _generate_hypercube(samples, 30, rng),
-            ]
-        )
-    out = sample_without_replacement(2 ** dimensions, samples, random_state=rng).astype(
-        dtype=">u4", copy=False
-    )
-    out = np.unpackbits(out.view(">u1")).reshape((-1, 32))[:, -dimensions:]
-    return out
+# def _generate_hypercube(samples, dimensions, rng):
+#     """Returns distinct binary samples of length dimensions."""
+#     if dimensions > 30:
+#         return np.hstack(
+#             [
+#                 rng.randint(2, size=(samples, dimensions - 30)),
+#                 _generate_hypercube(samples, 30, rng),
+#             ]
+#         )
+#     out = sample_without_replacement(2 ** dimensions, samples, random_state=rng).astype(
+#         dtype=">u4", copy=False
+#     )
+#     out = np.unpackbits(out.view(">u1")).reshape((-1, 32))[:, -dimensions:]
+#     return out
 
 class BlobGenerator:
     """Generate a random n-class classification problem.
@@ -156,20 +157,21 @@ class BlobGenerator:
 
     def __init__(
         self,
-        n_samples=100,
-        n_features=20,
+        train_size = 1000,
+        test_frac = 1/5,
+        n_features=2,
         n_informative=2,
-        n_redundant=2,
+        n_redundant=0,
         n_repeated=0,
         n_classes=2,
-        n_clusters_per_class=2,
+        n_clusters_per_class=1,
         weights=None,
-        flip_y=0.01,
+        flip_y=0,
         class_sep=1.0,
         hypercube=True,
         shift=0.0,
         scale=1.0,
-        shuffle=True,
+        shuffle=False,
         random_state=None,
         var = 1,
         cov = 0,
@@ -192,7 +194,9 @@ class BlobGenerator:
                 )
             )
 
-        self.n_samples = n_samples
+        self.n_samples = int(train_size*(1+test_frac))
+        self.train_size = train_size
+        self.test_frac = test_frac
         self.n_features = n_features
         self.n_informative = n_informative
         self.n_redundant = n_redundant
@@ -280,7 +284,7 @@ class BlobGenerator:
             # A = 2 * generator.rand(n_informative, n_informative) - 1
             # A = np.identity(n_informative) #uncorrelated features
 
-            #Here I change the covariance matrix such that the covariance between features is fixex as cov
+            #Here I change the covariance matrix such that the covariance between features is fixed as cov
             #and the variance fixed as var
 
             A=np.full((self.n_informative, self.n_informative), self.cov)
@@ -332,11 +336,17 @@ class BlobGenerator:
 
         return X, y
 
+    def create_train_test(self):
+        X,y = self.make_classification()
+        X_train, X_test, y_train, y_test = train_test_split(X,y,train_size=self.train_size, random_state=self.generator)
+        return {'train':{'X':X_train,'y':y_train}, 'test':{'X':X_test, 'y':y_test}}
+
 #%%
 
 if __name__ == '__main__':
     generator = BlobGenerator(
-        n_samples=1000,
+        train_size = 1000,
+        test_frac = 1/5,
         n_features=2,
         n_informative=2,
         n_redundant=0,
@@ -353,7 +363,7 @@ if __name__ == '__main__':
         cov = 0,
         random_imbalance=True)
 
-    X1,Y1 = generator.make_classification()
+    d = generator.create_train_test()
 
-    import matplotlib.pyplot as plt
-    plt.scatter(X1[:, 0], X1[:, 1], marker="o", c=Y1, s=25, edgecolor="k", alpha=0.5)
+    # import matplotlib.pyplot as plt
+    # plt.scatter(X1[:, 0], X1[:, 1], marker="o", c=Y1, s=25, edgecolor="k", alpha=0.5)
