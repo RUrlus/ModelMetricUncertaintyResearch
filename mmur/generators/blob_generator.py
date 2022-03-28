@@ -22,23 +22,6 @@ from sklearn.utils import shuffle as util_shuffle
 from sklearn.utils.random import sample_without_replacement
 from sklearn.model_selection import train_test_split
 
-
-
-# def _generate_hypercube(samples, dimensions, rng):
-#     """Returns distinct binary samples of length dimensions."""
-#     if dimensions > 30:
-#         return np.hstack(
-#             [
-#                 rng.randint(2, size=(samples, dimensions - 30)),
-#                 _generate_hypercube(samples, 30, rng),
-#             ]
-#         )
-#     out = sample_without_replacement(2 ** dimensions, samples, random_state=rng).astype(
-#         dtype=">u4", copy=False
-#     )
-#     out = np.unpackbits(out.view(">u1")).reshape((-1, 32))[:, -dimensions:]
-#     return out
-
 class BlobGenerator:
     """Generate a random n-class classification problem.
 
@@ -158,7 +141,7 @@ class BlobGenerator:
     def __init__(
         self,
         train_size = 1000,
-        test_frac = 1/5,
+        test_size = 200,
         n_features=2,
         n_informative=2,
         n_redundant=0,
@@ -194,9 +177,11 @@ class BlobGenerator:
                 )
             )
 
-        self.n_samples = int(train_size*(1+test_frac))
+        # self.n_samples = int(train_size*(1+test_frac))
+        self.n_samples = train_size + test_size
         self.train_size = train_size
-        self.test_frac = test_frac
+        # self.test_frac = test_frac
+        self.test_size = test_size
         self.n_features = n_features
         self.n_informative = n_informative
         self.n_redundant = n_redundant
@@ -234,9 +219,14 @@ class BlobGenerator:
 
     def make_classification(self):
 
+        # Generate the number of occurences for each class from a multinomial
         if self.random_imbalance:
             instances = self.generator.multinomial(self.n_samples,self.weights)
+            if np.any(instances==0): # at least one instance for every class
+                instances[instances!=0] -= 1
+                instances[instances==0] += 1
             weights = instances/self.n_samples
+    
         else:
             weights = self.weights
 
@@ -341,12 +331,23 @@ class BlobGenerator:
         X_train, X_test, y_train, y_test = train_test_split(X,y,train_size=self.train_size, random_state=self.generator)
         return {'train':{'X':X_train,'y':y_train}, 'test':{'X':X_test, 'y':y_test}}
 
+    def split_train_test(self):
+        X,y = self.make_classification()
+        train_ind = self.generator.choice(len(y),size = self.train_size,replace=False)
+
+        # for i in range(self.n_classes):
+        #     if not np.any(y_train == )
+
+        X_train = X[train_ind], y_train = y[train_ind]
+        X_test = X[~train_ind], y_test = y[~train_ind]
+        return {'train':{'X':X_train,'y':y_train}, 'test':{'X':X_test, 'y':y_test}}
+
 #%%
 
 if __name__ == '__main__':
     generator = BlobGenerator(
-        train_size = 1000,
-        test_frac = 1/5,
+        train_size = 200,
+        test_size = 40,
         n_features=2,
         n_informative=2,
         n_redundant=0,
