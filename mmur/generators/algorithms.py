@@ -10,7 +10,9 @@ from sklearn.metrics import confusion_matrix
 from sklearn.utils import check_random_state
 import numpy as np
 from blob_generator import BlobGenerator
-
+from sklearn.utils._testing import ignore_warnings
+from sklearn.exceptions import ConvergenceWarning
+# import torch
 
 class LAlgorithm():
     """
@@ -24,7 +26,8 @@ class LAlgorithm():
         random_state=123,
         penalty = 'none', 
         n_hidden_layers = 5,
-        fix_init = True
+        fix_init = True,
+        learning_rate = 0.005
         ):
 
         model_names = {'LR','DT','NN','GB'}
@@ -36,12 +39,13 @@ class LAlgorithm():
         self.rng = check_random_state(random_state)
         self.penalty = penalty
         self.n_hidden_layers = n_hidden_layers
+        self.learning_rate = learning_rate
         self.fix_init = fix_init
 
-    def init_model(self,random_state=0):
+    def init_model(self,random_state=None):
         """Initialize the machine learning model. Optional seeding"""
 
-        if self.fix_init:
+        if random_state is not None:
             seeding = random_state
         else:
             seeding = self.rng
@@ -51,7 +55,7 @@ class LAlgorithm():
         if self.model_name == 'DT':
             self.model = DecisionTreeClassifier(random_state=seeding)
         if self.model_name == 'NN':
-            self.model = MLPClassifier(hidden_layer_sizes=self.n_hidden_layers, 
+            self.model = MLPClassifier(hidden_layer_sizes=self.n_hidden_layers, learning_rate_init = self.learning_rate,
             random_state=seeding, shuffle = False)
         if self.model_name == 'GB':
             self.model = GradientBoostingClassifier(random_state=seeding)
@@ -75,12 +79,16 @@ class LAlgorithm():
         y_pred = (probas[:,1]>tau).astype(int)
         return y_pred
 
+    # @ignore_warnings(category=ConvergenceWarning)
     def holdout_cm(self,model,data_dict,tau=0.5):
         X_train,X_test,y_train,y_test = self.unpack_data_dict(data_dict)
-        # model = self.init_model(random_state=train_seed)
+
+        if len(np.unique(y_train)) != self.data_generator.n_classes or len(np.unique(y_test)) != self.data_generator.n_classes:
+            return np.nan
+
         model.fit(X_train,y_train)
         y_pred = self.predict_label(model,X_test,tau)
-        return confusion_matrix(y_test,y_pred).tolist()
+        return confusion_matrix(y_test,y_pred,labels = [0,1]).tolist()
 
     def pipeline(self,train_seed = None,random_state = None, tau=0.5):
         """Performs one run of the pipeline of the machine learning model, 
@@ -98,11 +106,74 @@ class LAlgorithm():
         cm = self.holdout_cm(model,data_dict,tau=tau)
         return cm
 
-    def sim_true_cms(self,n_runs,n_jobs=-1,train_seed=0):
+    def sim_true_cms(self,n_runs,n_jobs=15,train_seed=0):
         #parallel makes it that the generator is not updated --> need to have that within the function
         cms = Parallel(n_jobs=n_jobs,verbose=1)(delayed(self.pipeline)(random_state = i) for i in range(n_runs))
+
+        #some runs have no occurrences of a certain class, delete those
+        cms = [x for x in cms if str(x) != 'nan']
+
         self.true_cms = cms #save confusion matrices
         return cms
+
+    #repeat nondeterministic training
+    def repeat_nd_train(self,n_runs,data_seed = None,tau=0.5,parallel = False):
+        """
+        :n_runs: int, the number of train/test runs
+        :data_seed: int, default = None, 
+        If specified, a fixed dataset is guaranteed
+        """
+
+        if data_seed is not None:
+            self.data_generator.generator = check_random_state(data_seed)
+        data_dict = self.data_generator.create_train_test()
+
+        if parallel:
+            cms = Parallel(n_jobs=-1)(delayed(self.init_apply)(data_dict,tau,random_state=seed) for seed in range(n_runs)) 
+
+        else:
+            cms = []
+            for _ in range(n_runs):
+                model = self.init_model()
+                cms.append(self.holdout_cm(model,data_dict,tau=tau))
+        return cms
+
+    def sim_prec_std(self,n_sets,n_runs,parallel = False):
+        if parallel:
+            stds = Parallel(n_jobs=-1)(delayed(self.calc_prec_std)(n_runs,data_seed=i) for i in range(n_sets))
+        else:
+            stds = []
+            for _ in range(n_sets):
+                stds.append(self.calc_prec_std(n_runs))
+        return stds
+
+    def sim_prec_iv(self,n_sets,n_runs,qrange=0.95,parallel = False,n_jobs=15):
+        if parallel:
+            iv_lens = Parallel(n_jobs=n_jobs)(delayed(self.calc_prec_iv)(n_runs,qrange=qrange,data_seed=i) for i in range(n_sets))
+        else:
+            iv_lens = []
+            for _ in range(n_sets):
+                iv_lens.append(self.calc_prec_iv(n_runs,qrange))
+        return iv_lens
+
+    def calc_prec_std(self,n_runs,data_seed = None):
+        cms = self.repeat_nd_train(n_runs,data_seed=data_seed)
+        precs = self.cms_to_precision(cms)
+        return np.nanstd(precs)
+
+    def calc_prec_iv(self,n_runs,qrange = 0.95,data_seed = None):
+        cms = self.repeat_nd_train(n_runs,data_seed=data_seed)
+        precs = self.cms_to_precision(cms)
+        precs = precs[~np.isnan(precs)]
+        q = (1-qrange)/2
+        lower = np.quantile(precs,q)
+        upper = np.quantile(precs,1-q)
+        return upper-lower
+
+    def init_apply(self,data_dict,tau,random_state=None):
+        model = self.init_model(random_state=random_state)
+        cm = self.holdout_cm(model,data_dict,tau)
+        return cm
 
     def cms_to_precision(self,cms):
         cms_array = np.array(cms)
@@ -117,8 +188,23 @@ class LAlgorithm():
         return TP/(TP+FN)
 
 if __name__ == '__main__':
-    data_generator = BlobGenerator()
-    LA = LAlgorithm('LR',data_generator)
-    cms = LA.sim_true_cms(5)
-    precs = LA.cms_to_precision(cms)
-    # print(cm)
+    import matplotlib.pyplot as plt
+    data_generator = BlobGenerator(train_size=1000,test_size=200,weights = [0.8,0.2],random_imbalance=True)
+    LA = LAlgorithm('NN',data_generator)
+    
+    # cms = []
+    # for i in range(100):
+    #     cms.append(LA.pipeline(train_seed=1,random_state=1))
+
+    data_dict = data_generator.create_train_test()
+    X_train,X_test,y_train,y_test = LA.unpack_data_dict(data_dict)
+
+    nn_model = LA.init_model(1)
+    nn_model.fit(X_train,y_train)
+
+    plt.plot(nn_model.loss_curve_)
+    print(nn_model.learning_rate)
+    # n_sets = 100
+    # n_runs = 100
+    # ivs= LA.sim_prec_iv(n_sets,n_runs,qrange=0.95,parallel = False,n_jobs=15)
+    # print(ivs)
