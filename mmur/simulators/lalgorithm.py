@@ -1,23 +1,22 @@
+import warnings
+
+import numpy as np
+import xgboost as xgb
 from joblib import Parallel,delayed
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
-from logistic_generator import LogisticGenerator
 from sklearn.ensemble import GradientBoostingClassifier
-import xgboost as xgb
-
+from sklearn.utils._testing import ignore_warnings
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import confusion_matrix
 from sklearn.utils import check_random_state
 from sklearn.utils import shuffle
-import numpy as np
-from blob_generator import BlobGenerator
-from sklearn.utils._testing import ignore_warnings
-from sklearn.exceptions import ConvergenceWarning
-import warnings
-# import torch
+
+from mmur.generators.blob_generator import BlobGenerator
 
 class LAlgorithm():
     """
@@ -38,7 +37,7 @@ class LAlgorithm():
         val_frac = 0.2
         ):
 
-        model_names = {'LR','DT','NN','XGB'}
+        model_names = {'LR','NN','XGB'}
         if model_name not in model_names:
             raise NameError('Model name not one of ', model_names)
 
@@ -70,10 +69,6 @@ class LAlgorithm():
             random_state=seeding, shuffle = False)
         if self.model_name == 'XGB':
             self.model = xgb.XGBClassifier(random_state=seeding,n_estimators=self.n_estimators,eta=0.5)
-            # self.model = xgb.XGBClassifier(random_state=seeding,n_estimators=self.n_estimators)
-            # self.model = GradientBoostingClassifier(random_state=seeding)
-        #random_state in the MLP fixes weight + bias initializations and batch sampling
-        #might need to use Pytorch instead to allow more flexibility
         return self.model
 
     def unpack_data_dict(self,data_dict,stack = False):
@@ -92,24 +87,12 @@ class LAlgorithm():
         y_pred = (probas[:,1]>tau).astype(int)
         return y_pred
 
-    # @ignore_warnings(category=ConvergenceWarning)
     def holdout_cm(self,model,data_dict,tau=0.5):
         X_train,X_test,y_train,y_test = self.unpack_data_dict(data_dict)
 
         if len(np.unique(y_train)) != self.data_generator.n_classes or len(np.unique(y_test)) != self.data_generator.n_classes:
             return None
-
-        #TODO
-        # if self.model_name == 'NN':
-        #     with warnings.catch_warnings():
-        #         warnings.filterwarnings('error')
-        #         try:
-        #             model.fit(X_train,y_train)
-        #         except Warning:
-        #             print('Iteration skipped due to warning')
-        #             return None
-        # else:
-        #     model.fit(X_train,y_train)
+            
         model = self.train_model(model,X_train,y_train)
         if model is None:
             return None
@@ -148,7 +131,6 @@ class LAlgorithm():
 
         #data generation
         data_dict = self.data_generator.create_train_test()
-        # data_dict2 = self.data_generator.create_train_test()
 
         #model train and test
         cm = self.holdout_cm(model,data_dict,tau=tau)
