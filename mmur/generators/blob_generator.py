@@ -6,15 +6,19 @@ Generate samples of synthetic data sets.
 #          G. Louppe, J. Nothman
 # License: BSD 3 clause
 
+from logging import raiseExceptions
 import numbers
 import array
 from collections.abc import Iterable
 import random
 
 import numpy as np
+import pandas as pd
 from pyrsistent import v
 from scipy import linalg
 import scipy.sparse as sp
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.utils import check_array, check_random_state
@@ -85,13 +89,8 @@ class BlobGenerator:
             ``weights`` exceeds 1. Note that the actual class proportions will
             not exactly match ``weights`` when ``flip_y`` isn't 0.
 
-        class_sep : float, default=1.0
-            The factor multiplying the hypercube size.  Larger values spread
-            out the clusters/classes and make the classification task easier.
-
-        hypercube : bool, default=True
-            If True, the clusters are put on the vertices of a hypercube. If
-            False, the clusters are put on the vertices of a random polytope.
+        class_d : float, default=1.0
+            The euclidean distance between the clusters. For now only available for two classes.
 
         shift : float, ndarray of shape (n_features,) or None, default=0.0
             Shift features by the specified value. If None, then features
@@ -140,8 +139,8 @@ class BlobGenerator:
 
     def __init__(
         self,
-        train_size = 1000,
-        test_size = 200,
+        train_size,
+        test_size,
         n_features=2,
         n_informative=2,
         n_redundant=0,
@@ -150,15 +149,15 @@ class BlobGenerator:
         n_clusters_per_class=1,
         weights=None,
         flip_y=0,
-        class_sep=1.0,
-        hypercube=True,
+        class_d=2.0,
         shift=0.0,
         scale=1.0,
         shuffle=False,
-        random_state=None,
         var = 1,
         cov = 0,
-        random_imbalance = False):
+        random_imbalance = False,
+        imbalance_prior_frac = None,
+        random_state=None):
 
         # Count features, clusters and samples
         if n_informative + n_redundant + n_repeated > n_features:
@@ -177,10 +176,8 @@ class BlobGenerator:
                 )
             )
 
-        # self.n_samples = int(train_size*(1+test_frac))
         self.n_samples = train_size + test_size
         self.train_size = train_size
-        # self.test_frac = test_frac
         self.test_size = test_size
         self.n_features = n_features
         self.n_informative = n_informative
@@ -189,14 +186,14 @@ class BlobGenerator:
         self.n_classes = n_classes
         self.n_clusters_per_class = n_clusters_per_class
         self.flip_y = flip_y
-        self.class_sep = class_sep
-        self.hypercube = hypercube
+        self.class_d = class_d
         self.shift = shift
         self.scale = scale
         self.shuffle = shuffle
         self.var = var
         self.cov = cov
         self.random_imbalance = random_imbalance
+        self.imbalance_prior_frac = imbalance_prior_frac
         self.generator = check_random_state(random_state)
 
         if weights is not None:
@@ -221,7 +218,19 @@ class BlobGenerator:
 
         # Generate the number of occurences for each class from a multinomial
         if self.random_imbalance:
-            instances = self.generator.multinomial(self.n_samples,self.weights)
+
+            # To introduce additional variance to the class balance, use a beta prior for the binomial draws
+            # self.imbalance_prior_frac weighs the evidence for the beta prior 
+            if self.imbalance_prior_frac is not None:
+                a = np.max([1,int(self.weights[0] * self.n_samples * self.imbalance_prior_frac)])
+                b = np.max([1,int(self.weights[1] * self.n_samples * self.imbalance_prior_frac)])
+                p_prior = self.generator.beta(a,b)
+                p_weights = [p_prior,1-p_prior]
+            else:
+                p_weights = self.weights
+
+            instances = self.generator.multinomial(self.n_samples,p_weights)
+
             if np.any(instances==0): # at least one instance for every class
                 instances[instances!=0] -= 1
                 instances[instances==0] += 1
@@ -246,19 +255,18 @@ class BlobGenerator:
         X = np.zeros((self.n_samples, self.n_features))
         y = np.zeros(self.n_samples, dtype=int)
 
-        # Build the polytope whose vertices become cluster centroids
-        # centroids = _generate_hypercube(n_clusters, n_informative, generator).astype(
-        #     float, copy=False
-        # )
-
         #change centroids to fixed points
         centroids = np.vstack([np.zeros(self.n_informative),np.ones(self.n_informative)])
 
-        centroids *= 2 * self.class_sep
-        centroids -= self.class_sep
-        if not self.hypercube:
-            centroids *= self.generator.rand(n_clusters, 1)
-            centroids *= self.generator.rand(1, self.n_informative)
+        # centroids *= 2 * self.class_sep
+        # centroids -= self.class_sep
+
+        if n_clusters == 2:
+            d_eucl = np.linalg.norm(centroids[0]-centroids[1])
+            centroids = centroids/d_eucl * self.class_d
+
+        else:
+            raise Exception("No setting yet for more than two clusters")
 
         # Initially draw informative features from the standard normal
         X[:, :self.n_informative] = self.generator.randn(self.n_samples, self.n_informative)
@@ -301,10 +309,10 @@ class BlobGenerator:
         if n_useless > 0:
             X[:, -n_useless:] = self.generator.randn(self.n_samples, n_useless)
 
-        # Randomly replace labels
+        # Randomly flip labels with probability flip_y
         if self.flip_y >= 0.0:
             flip_mask = self.generator.rand(self.n_samples) < self.flip_y
-            y[flip_mask] = self.generator.randint(self.n_classes, size=flip_mask.sum())
+            y[flip_mask] = 1 - y[flip_mask]
 
         # Randomly shift and scale
         if self.shift is None:
@@ -334,13 +342,18 @@ class BlobGenerator:
     def split_train_test(self):
         X,y = self.make_classification()
         train_ind = self.generator.choice(len(y),size = self.train_size,replace=False)
-
-        # for i in range(self.n_classes):
-        #     if not np.any(y_train == )
-
         X_train = X[train_ind], y_train = y[train_ind]
         X_test = X[~train_ind], y_test = y[~train_ind]
         return {'train':{'X':X_train,'y':y_train}, 'test':{'X':X_test, 'y':y_test}}
+
+    def plot_blobs(self,X,y,contour = True,scatter = True):
+        if contour:
+            data= pd.DataFrame(X)
+            data['label'] = y
+            sns.displot(data,x = 0,y=1,hue='label',kind='kde')
+        if scatter:
+            plt.scatter(X[:, 0], X[:, 1], marker="o", c=y, s=25, edgecolor="k")
+        plt.show()
 
 #%%
 
@@ -355,16 +368,34 @@ if __name__ == '__main__':
         n_classes=2,
         n_clusters_per_class=1,
         weights=[0.5,0.5],
-        flip_y=0.01,
-        class_sep=1.0,
+        flip_y=0.1,
+        class_d=2,
         scale=1.0,
         shuffle=True,
         random_state=123,
         var = 1,
         cov = 0,
-        random_imbalance=True)
+        random_imbalance=True,
+        imbalance_prior_frac=0.8)
 
-    d = generator.create_train_test()
+    bal_beta = []
+    for _ in range(10000):
+        X,y = generator.make_classification()
+        bal_beta.append(np.mean(y))
 
+    bal_beta = []
+    for _ in range(10000):
+        X,y = generator.make_classification()
+        bal_beta.append(np.mean(y))
+    
+    generator.imbalance_prior_frac = None
+    bal = []
+    for _ in range(10000):
+        X,y = generator.make_classification()
+        bal.append(np.mean(y))
+    
+    df = pd.DataFrame({'balance without prior': bal,'balance with beta prior': bal_beta})
+    sns.displot(df, kind= 'kde')
+    plt.show()
     # import matplotlib.pyplot as plt
     # plt.scatter(X1[:, 0], X1[:, 1], marker="o", c=Y1, s=25, edgecolor="k", alpha=0.5)

@@ -4,14 +4,19 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
 from logistic_generator import LogisticGenerator
 from sklearn.ensemble import GradientBoostingClassifier
+import xgboost as xgb
+
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import confusion_matrix
 from sklearn.utils import check_random_state
+from sklearn.utils import shuffle
 import numpy as np
 from blob_generator import BlobGenerator
 from sklearn.utils._testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
+import warnings
 # import torch
 
 class LAlgorithm():
@@ -25,12 +30,15 @@ class LAlgorithm():
         data_generator, 
         random_state=123,
         penalty = 'none', 
-        n_hidden_layers = 5,
-        fix_init = True,
-        learning_rate = 0.005
+        n_hidden_nodes = 100,
+        nd_train = False,
+        learning_rate = 0.005,
+        n_estimators = 10,
+        XGB_validation = True,
+        val_frac = 0.2
         ):
 
-        model_names = {'LR','DT','NN','GB'}
+        model_names = {'LR','DT','NN','XGB'}
         if model_name not in model_names:
             raise NameError('Model name not one of ', model_names)
 
@@ -38,9 +46,12 @@ class LAlgorithm():
         self.data_generator = data_generator
         self.rng = check_random_state(random_state)
         self.penalty = penalty
-        self.n_hidden_layers = n_hidden_layers
+        self.n_hidden_nodes = n_hidden_nodes
         self.learning_rate = learning_rate
-        self.fix_init = fix_init
+        self.nd_train = nd_train
+        self.n_estimators = n_estimators
+        self.validation = XGB_validation
+        self.val_frac = val_frac
 
     def init_model(self,random_state=None):
         """Initialize the machine learning model. Optional seeding"""
@@ -57,8 +68,10 @@ class LAlgorithm():
         if self.model_name == 'NN':
             self.model = MLPClassifier(hidden_layer_sizes=self.n_hidden_layers, learning_rate_init = self.learning_rate,
             random_state=seeding, shuffle = False)
-        if self.model_name == 'GB':
-            self.model = GradientBoostingClassifier(random_state=seeding)
+        if self.model_name == 'XGB':
+            self.model = xgb.XGBClassifier(random_state=seeding,n_estimators=self.n_estimators,eta=0.5)
+            # self.model = xgb.XGBClassifier(random_state=seeding,n_estimators=self.n_estimators)
+            # self.model = GradientBoostingClassifier(random_state=seeding)
         #random_state in the MLP fixes weight + bias initializations and batch sampling
         #might need to use Pytorch instead to allow more flexibility
         return self.model
@@ -84,12 +97,47 @@ class LAlgorithm():
         X_train,X_test,y_train,y_test = self.unpack_data_dict(data_dict)
 
         if len(np.unique(y_train)) != self.data_generator.n_classes or len(np.unique(y_test)) != self.data_generator.n_classes:
-            return np.nan
+            return None
 
-        model.fit(X_train,y_train)
+        #TODO
+        # if self.model_name == 'NN':
+        #     with warnings.catch_warnings():
+        #         warnings.filterwarnings('error')
+        #         try:
+        #             model.fit(X_train,y_train)
+        #         except Warning:
+        #             print('Iteration skipped due to warning')
+        #             return None
+        # else:
+        #     model.fit(X_train,y_train)
+        model = self.train_model(model,X_train,y_train)
+        if model is None:
+            return None
+
         y_pred = self.predict_label(model,X_test,tau)
         return confusion_matrix(y_test,y_pred,labels = [0,1]).tolist()
 
+    def train_model(self,model,X_train,y_train):
+        if self.nd_train:
+            X_train, y_train = shuffle(X_train,y_train,random_state=self.rng)
+
+        if self.model_name == 'NN':
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                try:
+                    model.fit(X_train,y_train)
+                except Warning:
+                    print('Model did not converge')
+                    return None
+
+        if self.model_name == 'XGB' and self.validation:
+            X_train, X_val, y_train, y_val = train_test_split(X_train,y_train,test_size=int(len(y_train)*self.val_frac), random_state=self.rng)
+            model.fit(X_train,y_train,eval_set = [(X_val,y_val)],early_stopping_rounds=5)
+
+        else:
+            model.fit(X_train,y_train)
+        return model
+        
     def pipeline(self,train_seed = None,random_state = None, tau=0.5):
         """Performs one run of the pipeline of the machine learning model, 
         optional seeding for each component"""
@@ -108,10 +156,10 @@ class LAlgorithm():
 
     def sim_true_cms(self,n_runs,n_jobs=15,train_seed=0):
         #parallel makes it that the generator is not updated --> need to have that within the function
-        cms = Parallel(n_jobs=n_jobs,verbose=1)(delayed(self.pipeline)(random_state = i) for i in range(n_runs))
+        cms = Parallel(n_jobs=n_jobs,verbose=0)(delayed(self.pipeline)(random_state = i) for i in range(n_runs))
 
         #some runs have no occurrences of a certain class, delete those
-        cms = [x for x in cms if str(x) != 'nan']
+        cms = list(filter(None, cms))
 
         self.true_cms = cms #save confusion matrices
         return cms
@@ -136,6 +184,9 @@ class LAlgorithm():
             for _ in range(n_runs):
                 model = self.init_model()
                 cms.append(self.holdout_cm(model,data_dict,tau=tau))
+
+        #remove failed runs
+        cms = list(filter(None, cms))
         return cms
 
     def sim_prec_std(self,n_sets,n_runs,parallel = False):
@@ -187,11 +238,15 @@ class LAlgorithm():
         FN = cms_array[:,1,0]
         return TP/(TP+FN)
 
+    
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     data_generator = BlobGenerator(train_size=1000,test_size=200,weights = [0.8,0.2],random_imbalance=True)
-    LA = LAlgorithm('NN',data_generator)
+    LA = LAlgorithm('XGB',data_generator,learning_rate=0.0001)
     
+
+    LA.pipeline(0,0)
     # cms = []
     # for i in range(100):
     #     cms.append(LA.pipeline(train_seed=1,random_state=1))
@@ -200,10 +255,12 @@ if __name__ == '__main__':
     X_train,X_test,y_train,y_test = LA.unpack_data_dict(data_dict)
 
     nn_model = LA.init_model(1)
-    nn_model.fit(X_train,y_train)
 
-    plt.plot(nn_model.loss_curve_)
-    print(nn_model.learning_rate)
+    print(LA.holdout_cm(nn_model,data_dict))
+    # nn_model.fit(X_train,y_train)
+
+    # plt.plot(nn_model.loss_curve_)
+    # print(nn_model.learning_rate)
     # n_sets = 100
     # n_runs = 100
     # ivs= LA.sim_prec_iv(n_sets,n_runs,qrange=0.95,parallel = False,n_jobs=15)
