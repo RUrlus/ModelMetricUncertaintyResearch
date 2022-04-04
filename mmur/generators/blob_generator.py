@@ -3,7 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.utils import check_random_state
-from sklearn.utils import shuffle as util_shuffle
 from sklearn.model_selection import train_test_split
 
 
@@ -97,14 +96,6 @@ class BlobGenerator:
             Other parameters. Currently consist of parameters characterizing the 
             beta distribution used as a prior in case `random_imbalance` is True
 
-        Returns
-        -------
-        X : ndarray of shape (n_samples, n_features)
-            The generated samples.
-
-        y : ndarray of shape (n_samples,)
-            The integer labels for class membership of each sample.
-
         """
 
     def __init__(
@@ -188,10 +179,10 @@ class BlobGenerator:
 
         Returns
         -------
-        X : ndarray
+        X : ndarray of shape (n_samples, n_features)
             2D array containing the `float`-type feature values. First dimension corresponds to the observation, while the
             second dimension corresponds to the feature.
-        y : ndarray
+        y : ndarray of shape (n_samples,)
             1D array containing the `int`-type label values. For a negative label equal to 0 and equal to 1
             for a positive label.
         """
