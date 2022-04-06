@@ -60,7 +60,7 @@ class LAlgorithm():
             self.learning_rate = kwargs.get('learning_rate', 0.005)
         elif self.model_name == 'XGB':
             self.n_estimators = kwargs.get('n_estimators', 10)
-            self.val_frac = kwargs.get('val_frac', None)
+            self.val_frac = kwargs.get('val_frac', 0.2)
         else:
             raise NameError('Model name not one of ', model_names)
 
@@ -103,13 +103,38 @@ class LAlgorithm():
         cm = self._holdout_cm(model, data_dict, tau)
         return cm
 
-    def _cms_to_precision(self, cms):
+    def cms_to_precision(self, cms):
+        """
+        Computes the precisions based on a list of confusion matrices
+
+        Parameters
+        cms : list
+            List of (2 by 2) confusion matrices, where each confusion matrix is a list with two sublists 
+            of length 2, containing the counts. [[true negatives,false positives],[false negatives,true positives]]
+
+        Returns
+        TP/(TP+FP) : ndarray
+            1D numpy array of precisions
+        """
+
         cms_array = np.array(cms)
         TP = cms_array[:, 1, 1]
         FP = cms_array[:, 0, 1]
         return TP/(TP+FP)
 
-    def _cms_to_recall(self, cms):
+    def cms_to_recall(self, cms):
+        """
+        Computes the recalls based on a list of confusion matrices
+
+        Parameters
+        cms : list
+            List of(2 by 2) confusion matrices, where each confusion matrix is a list with two sublists
+            of length 2, containing the counts. [[true negatives, false positives], [false negatives, true positives]]
+
+        Returns
+        TP/(TP+FN) : ndarray
+            Vector of recalls
+        """
         cms_array = np.array(cms)
         TP = cms_array[:, 1, 1]
         FN = cms_array[:, 1, 0]
@@ -137,7 +162,7 @@ class LAlgorithm():
         if len(np.unique(y_train)) != self.data_generator.n_classes or len(np.unique(y_test)) != self.data_generator.n_classes:
             return None
 
-        model = self.train_model(model, X_train, y_train)
+        model = self._train_model(model, X_train, y_train)
         if model is None:
             return None
 
@@ -157,7 +182,7 @@ class LAlgorithm():
                     print('Model did not converge')
                     return None
 
-        if self.model_name == 'XGB' and self.validation:
+        if self.model_name == 'XGB' and self.val_frac is not None:
             X_train, X_val, y_train, y_val = train_test_split(
                 X_train, y_train, test_size=int(len(y_train)*self.val_frac), random_state=self.rng)
             model.fit(X_train, y_train, eval_set=[
@@ -241,13 +266,14 @@ class LAlgorithm():
             self.data_generator.generator = check_random_state(data_seed)
         data_dict = self.data_generator.create_train_test()
 
-        cms = Parallel(n_jobs=-1)(delayed(self._init_apply)(data_dict, tau, random_state=seed) for seed in range(n_runs))
+        cms = Parallel(n_jobs=n_jobs)(delayed(self._init_apply)(data_dict,
+                                                                tau, random_state=seed) for seed in range(n_runs))
 
         # remove failed runs
         cms = list(filter(None, cms))
         return cms
 
-    def sim_prec_std(self, n_sets, n_runs, n_jobs = None):
+    def sim_prec_std(self, n_sets, n_runs, n_jobs=None):
         """
         Simulates the standard deviation of the precision due to nondeterministic training over random train/test splits
 
@@ -266,7 +292,8 @@ class LAlgorithm():
         stds : list of float
             the sample standard deviation for each train/test sample
         """
-        stds = Parallel(n_jobs=-1)(delayed(self._calc_prec_std)(n_runs, data_seed=i) for i in range(n_sets))
+        stds = Parallel(n_jobs=-1)(delayed(self._calc_prec_std)
+                                   (n_runs, data_seed=i) for i in range(n_sets))
         return stds
 
     def sim_prec_iv(self, n_sets, n_runs, qrange=0.95, n_jobs=None):
