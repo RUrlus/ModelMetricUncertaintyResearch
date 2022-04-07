@@ -6,11 +6,8 @@ from joblib import Parallel, delayed
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.exceptions import ConvergenceWarning
 from sklearn.utils import shuffle, check_random_state
-from sklearn.utils._testing import ignore_warnings
-from sklearn.metrics import precision_score, recall_score, confusion_matrix
+from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 
 from mmur.generators.blob_generator import BlobGenerator
@@ -73,16 +70,16 @@ class LAlgorithm():
             seeding = self.rng
 
         if self.model_name == 'LR':
-            self.model = LogisticRegression(penalty=self.penalty)
+            model = LogisticRegression(penalty=self.penalty)
         if self.model_name == 'DT':
-            self.model = DecisionTreeClassifier(random_state=seeding)
+            model = DecisionTreeClassifier(random_state=seeding)
         if self.model_name == 'NN':
-            self.model = MLPClassifier(hidden_layer_sizes=self.n_hidden_nodes, learning_rate_init=self.learning_rate,
-                                       random_state=seeding, shuffle=False)
+            model = MLPClassifier(hidden_layer_sizes=self.n_hidden_nodes, learning_rate_init=self.learning_rate,
+                                  random_state=seeding, shuffle=False)
         if self.model_name == 'XGB':
-            self.model = xgb.XGBClassifier(
+            model = xgb.XGBClassifier(
                 random_state=seeding, n_estimators=self.n_estimators, eta=0.5)
-        return self.model
+        return model
 
     def _calc_prec_std(self, n_runs, data_seed=None):
         cms = self.repeat_nd_train(n_runs, data_seed=data_seed)
@@ -167,11 +164,45 @@ class LAlgorithm():
             return None
 
         y_pred = self._predict_label(model, X_test, tau)
-        return confusion_matrix(y_test, y_pred, labels=[0, 1]).tolist()
+        return confusion_matrix(y_test, y_pred, labels=[0, 1]).flatten()
 
-    def _train_model(self, model, X_train, y_train):
+    def _fit_model(self, model, X_train, y_train, shuffle=False, random_state=None, val_frac=None):
+        if random_state is not None:
+            generator = check_random_state(random_state)
+        else:
+            generator = self.generator
+
+        if shuffle:
+            X_train, y_train = shuffle(
+                X_train, y_train, random_state=generator)
+
+        if str(model) == "<class 'sklearn.neural_network._multilayer_perceptron.MLPClassifier'>":
+            with warnings.catch_warnings():
+                warnings.filterwarnings('error')
+                try:
+                    model.fit(X_train, y_train)
+                except Warning:
+                    print('Model did not converge')
+                    return None
+        elif str(model) == "<class 'xgboost.sklearn.XGBClassifier'>" and val_frac is not None:
+            X_train, X_val, y_train, y_val = train_test_split(
+                X_train, y_train, test_size=int(len(y_train)*val_frac), random_state=generator)
+            model.fit(X_train, y_train, eval_set=[
+                      (X_val, y_val)], early_stopping_rounds=5)
+
+        else:
+            model.fit(X_train, y_train)
+        return model
+
+    def _train_model(self, model, X_train, y_train, random_state=None):
+        if random_state is not None:
+            generator = check_random_state(random_state)
+        else:
+            generator = self.generator
+
         if self.nd_train:
-            X_train, y_train = shuffle(X_train, y_train, random_state=self.rng)
+            X_train, y_train = shuffle(
+                X_train, y_train, random_state=generator)
 
         if self.model_name == 'NN':
             with warnings.catch_warnings():
@@ -184,7 +215,7 @@ class LAlgorithm():
 
         if self.model_name == 'XGB' and self.val_frac is not None:
             X_train, X_val, y_train, y_val = train_test_split(
-                X_train, y_train, test_size=int(len(y_train)*self.val_frac), random_state=self.rng)
+                X_train, y_train, test_size=int(len(y_train)*self.val_frac), random_state=generator)
             model.fit(X_train, y_train, eval_set=[
                       (X_val, y_val)], early_stopping_rounds=5)
 
@@ -192,21 +223,52 @@ class LAlgorithm():
             model.fit(X_train, y_train)
         return model
 
-    def _pipeline(self, train_seed=None, random_state=None, tau=0.5):
+    def _pipeline(self, random_state=None, tau=0.5, **kwargs):
         """Performs one run of the pipeline of the machine learning model, optional seeding for each component"""
+
         if random_state is not None:
-            self.data_generator.generator = check_random_state(random_state)
+            generator = check_random_state(random_state)
+        else:
+            generator = self.rng
+
         # initialization
-        model = self._init_model(train_seed)
+        model = self._init_model(generator)
 
         # data generation
-        data_dict = self.data_generator.create_train_test()
+        data_dict = self.data_generator.create_train_test(
+            random_state=generator)
 
         # model train and test
         cm = self._holdout_cm(model, data_dict, tau=tau)
         return cm
 
-    # TODO: add tau argument
+    def execute_model(self, kwargs):
+        """_summary_
+
+        Parameters
+        ----------
+        kwargs : _type_
+            _description_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+        rng = check_random_state(kwargs['seed'])
+        init_model = kwargs["model"](
+            random_state=rng, **kwargs['model_kwargs'])
+
+        data_dict = self.data_generator.create_train_test(random_state=rng)
+        X_train, X_test, y_train, y_test = self._unpack_data_dict(data_dict)
+
+        fitted_model = self._fit_model(
+            model=init_model, X_train=X_train, y_train=y_train, **kwargs['fit_kwargs'])
+
+        predictions = self._predict_label(fitted_model, X_test, kwargs['tau'])
+
+        return confusion_matrix(y_test, predictions, labels=[0, 1]).flatten()
+
     def sim_true_cms(self, n_runs, n_jobs=None, train_seed=0):
         """
         Simulates the "true" holdout set distribution of the confusion matrix.  
@@ -229,12 +291,16 @@ class LAlgorithm():
             a list of all the confusion matrices
         """
 
-        # parallel makes it that the generator is not updated --> need to have that within the function
+        thread_seeds = self.rng.integers(low=0, high=np.iinfo(
+            np.uint64).max, size=n_runs, dtype=np.uint64)
+
         cms = Parallel(n_jobs=n_jobs, verbose=0)(
-            delayed(self._pipeline)(random_state=i) for i in range(n_runs))
+            delayed(self._pipeline)(random_state=thread_seeds[i]) for i in range(n_runs))
+
+        np.vstack(cms)
 
         # some runs have no occurrences of a certain class, delete those
-        cms = list(filter(None, cms))
+        cms = list(filter(None, cms))  # TODO replace by numpy method
 
         self.true_cms = cms  # save confusion matrices
         return cms
