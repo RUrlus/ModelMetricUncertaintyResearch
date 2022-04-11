@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.utils import check_random_state
 from sklearn.model_selection import train_test_split
 
 
@@ -70,11 +69,11 @@ class BlobGenerator:
         class_d : float, default=1.0
             The euclidean distance between the clusters. For now only available for two classes.
 
-        var : float, 
+        var : float, default=1
             specifies the variance of each feature
 
-        cov : 
-            float, specifies the covariance between each pair of features
+        cov : float, default=0
+        specifies the covariance between each pair of features
 
         flip_y : float, default=0.01
             The fraction of samples whose class is assigned randomly. Larger
@@ -82,7 +81,7 @@ class BlobGenerator:
             task harder. Note that the default setting flip_y > 0 might lead
             to less than ``n_classes`` in y in some cases.
 
-        random_imbalance : bool, default = False
+        random_imbalance : bool, default=False
             If set to True, the data sample class balance is stochastic, with the 
             number of draws for each class Multinomially distributed with 
             probabilities set to ``weights``.
@@ -171,9 +170,9 @@ class BlobGenerator:
             self.imbalance_prior_a = kwargs.get('imbalance_prior_a', None)
             self.imbalance_prior_b = kwargs.get('imbalance_prior_b', None)
 
-        self.generator = check_random_state(random_state)
+        self.rng = np.random.default_rng(random_state)
 
-    def make_classification(self):
+    def make_classification(self, random_state=None):
         """
         Creates a sample based on the inputs provided to the instance initialization.
 
@@ -186,19 +185,23 @@ class BlobGenerator:
             1D array containing the `int`-type label values. For a negative label equal to 0 and equal to 1
             for a positive label.
         """
+        if random_state is not None:
+            rng = np.random.default_rng(random_state)
+        else:
+            rng = self.rng
 
         # Generate the number of occurences for each class from a multinomial
         if self.random_imbalance:
 
             # To introduce additional variance to the class balance, use a beta prior for the binomial draws
             if self.imbalance_prior_a is not None and self.imbalance_prior_b is not None:
-                p_prior = self.generator.beta(
+                p_prior = rng.beta(
                     self.imbalance_prior_a, self.imbalance_prior_b)
                 p_weights = [p_prior, 1-p_prior]
             else:
                 p_weights = self.weights
 
-            instances = self.generator.multinomial(self.n_samples, p_weights)
+            instances = rng.multinomial(self.n_samples, p_weights)
             weights = instances/self.n_samples
 
         else:
@@ -235,8 +238,8 @@ class BlobGenerator:
             raise Exception("No setting yet for more than two clusters")
 
         # Initially draw informative features from the standard normal
-        X[:, :self.n_informative] = self.generator.randn(
-            self.n_samples, self.n_informative)
+        X[:, :self.n_informative] = rng.standard_normal(size=(
+            self.n_samples, self.n_informative))
 
         # Create each cluster; a variant of make_blobs
         stop = 0
@@ -256,8 +259,8 @@ class BlobGenerator:
 
         # Create redundant features
         if self.n_redundant > 0:
-            B = 2 * self.generator.rand(self.n_informative,
-                                        self.n_redundant) - 1
+            B = 2 * rng.uniform(size=(self.n_informative,
+                                      self.n_redundant)) - 1
             X[:, self.n_informative: self.n_informative + self.n_redundant] = np.dot(
                 X[:, :self.n_informative], B
             )
@@ -266,23 +269,29 @@ class BlobGenerator:
         if self.n_repeated > 0:
             n = self.n_informative + self.n_redundant
             indices = (
-                (n - 1) * self.generator.rand(self.n_repeated) + 0.5).astype(np.intp)
+                (n - 1) * rng.uniform(size=self.n_repeated) + 0.5).astype(np.intp)
             X[:, n: n + self.n_repeated] = X[:, indices]
 
         # Fill useless features
         if n_useless > 0:
-            X[:, -n_useless:] = self.generator.randn(self.n_samples, n_useless)
+            X[:, -
+                n_useless:] = rng.standard_normal((self.n_samples, n_useless))
 
         # Randomly flip labels with probability flip_y
         if self.flip_y >= 0.0:
-            flip_mask = self.generator.rand(self.n_samples) < self.flip_y
+            flip_mask = rng.uniform(size=self.n_samples) < self.flip_y
             y[flip_mask] = 1 - y[flip_mask]
 
         return X, y
 
-    def create_train_test(self):
+    def create_train_test(self, random_state=None):
         """
         Creates a randomly sampled train and test set.
+
+        Parameters
+        -------
+        random_state : RandomState instance
+            ,default is None
 
         Returns
         -------
@@ -291,10 +300,26 @@ class BlobGenerator:
                 * 'train' which contains the labels `y` and `X`
                 * 'test' which contains the labels `y` and `X`
         """
-        X, y = self.make_classification()
+        if random_state is not None:
+            rng = np.random.default_rng(random_state)
+        else:
+            rng = self.rng
+
+        X, y = self.make_classification(random_state=rng)
+        split_seed = rng.integers(low=0, high=np.iinfo(np.uint32).max)
+
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y, train_size=self.train_size, random_state=self.generator)
+            X, y, train_size=self.train_size, random_state=split_seed)
         return {'train': {'X': X_train, 'y': y_train}, 'test': {'X': X_test, 'y': y_test}}
+
+    def split_train_test(self, X, y, train_size, rng):
+        train_indices = rng.choice(len(y), size=train_size, replace=False)
+        train_mask = np.zeros(len(y), dtype=bool)
+        train_mask[train_indices, ] = True
+
+        X_train, y_train = X[train_mask], y[train_mask]
+        X_test, y_test = X[~train_mask], y[~train_mask]
+        return X_train, X_test, y_train, y_test
 
     def plot_blobs(self, X, y, contour=True, scatter=True):
         """
