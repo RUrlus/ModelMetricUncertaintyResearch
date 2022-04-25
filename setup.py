@@ -62,4 +62,10 @@ release = {is_release!s}
 
 if __name__ == '__main__':
     write_version_py()
-    setup(version=FULL_VERSION)
+    setup(
+        version=FULL_VERSION,
+        package_data={
+            "mmu": ['stan/*']
+        },
+        include_package_data=True,
+    )
