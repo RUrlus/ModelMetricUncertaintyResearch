@@ -6,7 +6,7 @@ import matplotlib.patches as mpatches
 import seaborn as sns
 
 from mmur.viz import _set_plot_style
-from mmu.metrics import compute_hdi
+from mmu.stats import compute_hdi
 
 COLORS = _set_plot_style()
 
