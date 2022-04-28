@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle as util_shuffle
 
 
 class BlobGenerator:
@@ -86,6 +87,9 @@ class BlobGenerator:
             number of draws for each class Multinomially distributed with 
             probabilities set to ``weights``.
 
+        shuffle : bool, default=True
+            If set to True, data is shuffled. Otherwise the observations are ordered by label.
+
         random_state : int, RandomState instance or None, default=None
             Determines random number generation for dataset creation. Pass an int
             for reproducible output across multiple function calls.
@@ -113,6 +117,7 @@ class BlobGenerator:
         var=1,
         cov=0,
         random_imbalance=False,
+        shuffle=True,
         random_state=None,
         **kwargs
     ):
@@ -148,6 +153,7 @@ class BlobGenerator:
         self.var = var
         self.cov = cov
         self.random_imbalance = random_imbalance
+        self.shuffle = shuffle
 
         if weights is not None:
             if len(weights) not in [n_classes, n_classes - 1]:
@@ -282,6 +288,9 @@ class BlobGenerator:
             flip_mask = rng.uniform(size=self.n_samples) < self.flip_y
             y[flip_mask] = 1 - y[flip_mask]
 
+        if self.shuffle:
+            X, y = util_shuffle(X, y, random_state=rng.integers(
+                low=0, high=np.iinfo(np.uint32).max))  # TODO: change seeding
         return X, y
 
     def create_train_test(self, random_state=None):
