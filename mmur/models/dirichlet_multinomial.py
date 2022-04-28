@@ -1,6 +1,6 @@
-from mmu.models.base import ConfusionMatrixBase
-from mmu.stan import _dm_code
-from mmu.stan import _dm_multi_code
+from mmur.models.base import ConfusionMatrixBase
+from mmur.stan import _dm_code
+from mmur.stan import _dm_multi_code
 
 
 class DirichletMultinomialConfusionMatrix(ConfusionMatrixBase):
