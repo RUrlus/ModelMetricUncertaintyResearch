@@ -64,7 +64,7 @@ def _unpack_data_dict(data_dict, stack=False):
 def _fit_model(model, X_train, y_train, shuffle=False, val_frac=None, random_state=None):
     generator = np.random.default_rng(random_state)
     sklearn_generator = np.random.RandomState(
-        generator.integers(low=0, high=np.iinfo(np.uint32).max))
+        generator.integers(low=0, high=np.iinfo(np.uint32).max))  # TODO: seeding
 
     if shuffle:
         X_train, y_train = shuffle(
@@ -79,6 +79,7 @@ def _fit_model(model, X_train, y_train, shuffle=False, val_frac=None, random_sta
                 print('Model did not converge')
                 return False
 
+    # TODO: isinstance(object) (google)
     elif str(type(model)) == "<class 'xgboost.sklearn.XGBClassifier'>" and val_frac is not None:
         X_train, X_val, y_train, y_val = train_test_split(
             X_train, y_train, test_size=int(len(y_train)*val_frac), random_state=sklearn_generator)
@@ -90,12 +91,12 @@ def _fit_model(model, X_train, y_train, shuffle=False, val_frac=None, random_sta
     return model
 
 
-def execute_model(kwargs, tau, seed, fixed_data=False, data_seed=123):
+def execute_model(params, tau, seed, fixed_data=False, data_seed=123):
     """Implements a learning algorithm on a train/test sample from the data generator, resulting in a confusion matrix
 
         Parameters
         ----------
-        kwargs : dict
+        params : dict
             Contains the parameters used to determine the learning algorithm configuration
                 'data_generator' : contains the class for data generation
                 'data_kwargs' : contains all data parameters
@@ -117,14 +118,15 @@ def execute_model(kwargs, tau, seed, fixed_data=False, data_seed=123):
             The confusion matrix resulting from training the model and applying it to the test set, of shape [4,]
         """
     rng = np.random.default_rng(seed)
-    init_seed = rng.integers(low=0, high=np.iinfo(np.uint32).max)
+    init_seed = rng.integers(low=0, high=np.iinfo(
+        np.uint32).max)  # TODO: seeding
 
     # Initialize a model instance
-    init_model = kwargs["model"](
-        random_state=init_seed, **kwargs['init_kwargs'])
+    init_model = params["model"](
+        random_state=init_seed, **params['init_kwargs'])
 
     # Create a data generator instance
-    data_generator = kwargs['data_generator'](**kwargs['data_kwargs'])
+    data_generator = params['data_generator'](**params['data_kwargs'])
 
     # Generate the data sample
     if fixed_data is True:
@@ -139,7 +141,7 @@ def execute_model(kwargs, tau, seed, fixed_data=False, data_seed=123):
 
     # Fit model to data
     fitted_model = _fit_model(
-        model=init_model, X_train=X_train, y_train=y_train, random_state=rng, **kwargs['fit_kwargs'])
+        model=init_model, X_train=X_train, y_train=y_train, random_state=rng, **params['fit_kwargs'])
 
     if not fitted_model:  # In case the model did not converge, ignore the run
         return np.repeat(np.nan, 4)
@@ -163,10 +165,6 @@ class LAlgorithm():
     data_generator : obj
         The data generator or DGP used to sample data from. Currently only BlobGenerator is supported.
 
-    nd_train : bool, default = False
-        To allow for nondeterministic training. True implies that different training runs can produce different model fits.
-        False implies that the same model fit is found for the same training set.
-
     random_state : int, RandomState instance or None, default = None
         Seed to allow for reproducible results.
 
@@ -181,7 +179,6 @@ class LAlgorithm():
         self,
         model_name,
         data_generator,
-        nd_train=False,
         random_state=None,
         **kwargs
     ):
@@ -195,7 +192,6 @@ class LAlgorithm():
         self.fit_kwargs = kwargs.get('fit_kwargs')
 
         self.rng = np.random.default_rng(random_state)
-        self.nd_train = nd_train
 
         # Define model class and store model parameters in self.model_kwargs
         self.model_kwargs = {}
@@ -214,7 +210,7 @@ class LAlgorithm():
                   'init_kwargs': self.init_kwargs, 'fit_kwargs': self.fit_kwargs}
         return kwargs
 
-    def sim_true_cms(self, n_runs, tau=0.5, n_jobs=None, seed=None):
+    def sim_true_cms(self, n_runs, tau=0.5, n_jobs=None, seed=None, fixed_data=False, data_seed=None):
         """
         Simulates the "true" holdout set distribution of the confusion matrix.  
         A train and test set are generated, and the specified model is applied
@@ -225,14 +221,20 @@ class LAlgorithm():
         n_runs : int
             the number iterations, equal to the number of train/test samples to generate
 
+        tau : float, default = 0.5
+            Classification threshold that translates a continous model output to a integer value, the predicted label
+
         n_jobs : int, default = None
             number of CPU's used to perform computations in parallel (using joblib's 'Parallel' 
             and 'delayed' functions)
 
+        seed : int, default = None
+            for reproducible results
+
         Returns
         -------
         cms : np.ndarray
-            of shape[n_runs,4], containing the confusion matrices.
+            of shape[n_runs,4], contains the confusion matrices.
         """
 
         generator = np.random.default_rng(seed)
@@ -243,7 +245,7 @@ class LAlgorithm():
 
         kwargs = self._create_model_kwargs()
         cms = np.vstack(Parallel(n_jobs=n_jobs, verbose=0)(
-            delayed(execute_model)(kwargs, tau, seed=thread_seeds[i]) for i in range(n_runs)))
+            delayed(execute_model)(kwargs, tau, seed=thread_seeds[i], fixed_data=fixed_data, data_seed=data_seed) for i in range(n_runs)))
         cms = cms[~np.isnan(cms).any(axis=1)].astype(int)
 
         self.true_cms = cms  # save confusion matrices
