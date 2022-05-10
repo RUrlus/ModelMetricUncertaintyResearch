@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 from sklearn.metrics import confusion_matrix
 from sklearn.linear_model import LogisticRegression
-# import mmu
+import mmu
 
 def bstrp_cm(cm, n_draws=1000, random_state=None):
     """Bootstrap a confusion matrix, equivalent to bootstrapping the test set and then computing the confusion matrices (given a deterministic predictor). To obtain a collection of confusion matrices approximating the confusion matrix' distribution.
@@ -92,7 +92,7 @@ def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=Non
         np.uint32).max)  # TODO: seeding
     kf = KFold(n_splits, shuffle=True, random_state=fold_seed)
 
-    n_test_obs = len(y)
+    n_test_obs = int(len(y)/n_splits)
     y_hat = np.zeros((n_splits,n_test_obs),dtype=int)
     y_true = np.zeros((n_splits,n_test_obs),dtype=int)
     for i, (train_index, test_index) in enumerate(kf.split(X)):
@@ -104,7 +104,7 @@ def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=Non
         y_hat[i,:] = clf.predict(X_test)
         y_true[i,:] = y_test
 
-    return mmu.confusion_matrices(y_true,y_hat,obs_axis=1)
+    return mmu.confusion_matrices(y_true,y_hat,obs_axis=0)
 
 
 def pred_iv(values, q_range=0.95):
