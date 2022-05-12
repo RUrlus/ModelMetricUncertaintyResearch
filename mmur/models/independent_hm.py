@@ -91,7 +91,7 @@ class IndependentHMConfusionMatrix(ConfusionMatrixBase):
             raise TypeError('``gam_b`` must be a float.')
 
         if total_count is None:
-            total_count = int(X.sum())
+            total_count = int(X[0].sum())
         elif isinstance(total_count, (int, float)):
             total_count = int(total_count)
         else:
