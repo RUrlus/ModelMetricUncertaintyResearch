@@ -92,14 +92,13 @@ class DirichletMultinomialConfusionMatrix(ConfusionMatrixBase):
             data, n_samples, sample_factor, n_cores, n_warmup, sampling_kwargs
         )
 
-#TODO: remove phi and v
 class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
     """Model a confusion matrix using a Dirichlet-multinomial."""
     def __init__(self, random_state=None):
         """Initialise the class."""
         self.code = _dm_multi_code
         self.prior_vars = ['theta']
-        self.post_vars = ['y_hat', 'theta_hat']
+        self.post_vars = ['y_hat','theta_hat']
         self.predictive_var = 'y_hat'
         # exclude transformed variables
         self._set_random_state(random_state)
@@ -128,8 +127,6 @@ class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
         y : np.ndarray[bool, np.int64], default=None
             the labels for the probabilities, must be set if X are probabilities
             rather than the confusion matrix
-        v : float, default=2
-            prior strength, should be value between 1 and 2.
         alpha : float, default=1
             concentration parameter hyper-prior dirichlet
         n_samples : int, default=10000
@@ -176,8 +173,8 @@ class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
             raise TypeError('``total_count`` must be `None` or `int`')
 
         data = {
-            'N': int(X.shape[0]),
             'alpha': alpha,
+            'N': int(X.shape[0]),
             'total_count': total_count,
             'y': X,
         }
