@@ -98,7 +98,7 @@ class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
     def __init__(self, random_state=None):
         """Initialise the class."""
         self.code = _dm_multi_code
-        self.prior_vars = ['phi', 'theta']
+        self.prior_vars = ['theta']
         self.post_vars = ['y_hat', 'theta_hat']
         self.predictive_var = 'y_hat'
         # exclude transformed variables
@@ -108,7 +108,6 @@ class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
         self,
         X,
         y=None,
-        v=2.0,
         alpha=1.0,
         n_samples=10000,
         sample_factor=1.5,
@@ -164,11 +163,6 @@ class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
         else:
             X = self._check_X(X)
 
-        if isinstance(v, int):
-            v = float(v)
-        elif not isinstance(v, float):
-            raise TypeError('``v`` must be a float.')
-
         if isinstance(alpha, int):
             alpha = float(alpha)
         elif not isinstance(alpha, float):
@@ -182,9 +176,8 @@ class DirichletMultinomialMultiConfusionMatrix(ConfusionMatrixBase):
             raise TypeError('``total_count`` must be `None` or `int`')
 
         data = {
-            'v': v,
-            'alpha': alpha,
             'N': int(X.shape[0]),
+            'alpha': alpha,
             'total_count': total_count,
             'y': X,
         }

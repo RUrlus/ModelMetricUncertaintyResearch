@@ -14,7 +14,6 @@ model {
 }
 
 generated quantities {
-    vector[4] theta_hat = dirichlet_rng(phi * v);
     int y_hat[4] = multinomial_rng(theta, total_count);
 }
 |
