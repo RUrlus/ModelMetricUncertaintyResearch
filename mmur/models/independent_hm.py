@@ -16,8 +16,9 @@ class IndependentHMConfusionMatrix(ConfusionMatrixBase):
         self,
         X,
         y=None,
-        v=2.0,
         alpha=1.0,
+        gam_a=0.001,
+        gam_b=0.001,
         n_samples=10000,
         sample_factor=1.5,
         total_count=None,
@@ -26,7 +27,7 @@ class IndependentHMConfusionMatrix(ConfusionMatrixBase):
         threshold=0.5,
         sampling_kwargs=None,
     ):
-        """Fit Dirichlet-Multinomial model over multiple observations and sample from the posterior.
+        """Fit a hierarchical (Dirichlet,Gamma)-Dirichlet-Multinomial model over multiple observations and sample from the posterior.
 
         Parameters
         ----------
@@ -37,12 +38,14 @@ class IndependentHMConfusionMatrix(ConfusionMatrixBase):
         y : np.ndarray[bool, np.int64], default=None
             the labels for the probabilities, must be set if X are probabilities
             rather than the confusion matrix
-        v : float, default=2
-            prior strength, should be value between 1 and 2.
         alpha : float, default=1
             concentration parameter hyper-prior dirichlet
+        gam_a : float, default=0.001
+            shape parameter hyper-prior gamma
+        gam_b : float, default=0.001
+            rate parameter hyper-prior gamma
         n_samples : int, default=10000
-            Number of samples to draw, used both during fit as well as draw
+            number of samples to draw, used both during fit as well as draw
             from posterior.
         sample_factor : float, int, default=1.5
             a factor to increase the number of samples drawn from the posterior
@@ -72,15 +75,20 @@ class IndependentHMConfusionMatrix(ConfusionMatrixBase):
         else:
             X = self._check_X(X)
 
-        if isinstance(v, int):
-            v = float(v)
-        elif not isinstance(v, float):
-            raise TypeError('``v`` must be a float.')
-
         if isinstance(alpha, int):
             alpha = float(alpha)
         elif not isinstance(alpha, float):
             raise TypeError('``alpha`` must be a float.')
+
+        if isinstance(gam_a, int):
+            gam_a = float(gam_a)
+        elif not isinstance(gam_a, float):
+            raise TypeError('``gam_a`` must be a float.')
+
+        if isinstance(gam_b, int):
+            gam_b = float(gam_b)
+        elif not isinstance(gam_b, float):
+            raise TypeError('``gam_b`` must be a float.')
 
         if total_count is None:
             total_count = int(X.sum())
@@ -90,8 +98,9 @@ class IndependentHMConfusionMatrix(ConfusionMatrixBase):
             raise TypeError('``total_count`` must be `None` or `int`')
 
         data = {
-            'v': v,
             'alpha': alpha,
+            'gam_a': gam_a,
+            'gam_b': gam_b,
             'N': int(X.shape[0]),
             'total_count': total_count,
             'y': X,
