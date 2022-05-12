@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 from sklearn.metrics import confusion_matrix
 from sklearn.linear_model import LogisticRegression
+from joblib import Parallel, delayed
 import mmu
 
 def bstrp_cm(cm, n_draws=1000, random_state=None):
@@ -106,6 +107,9 @@ def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=Non
 
     return mmu.confusion_matrices(y_true,y_hat,obs_axis=0)
 
+def sim_kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=None):
+    #TODO: think about how to compute k-fold cross validation confidence-intervals 0.
+    pass
 
 def pred_iv(values, q_range=0.95):
     return lower, upper
