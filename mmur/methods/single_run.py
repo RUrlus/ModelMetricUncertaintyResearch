@@ -109,9 +109,21 @@ def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=Non
 
     return mmu.confusion_matrices(y_true,y_hat,obs_axis=0)
 
-def sim_kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=None):
-    #TODO: think about how to compute k-fold cross validation confidence-intervals 0.
-    pass
+def sim_kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, n_jobs=None, random_state=None):
+    """K-fold cross-validation over multiple data samples
+    
+    X : np.ndarray[s,n,k]
+    y : np.ndarray[s,n]
+        First dim of y is used to determine number of data samples
+    """
+    n_samples = y.shape[0]
+    rng = np.random.default_rng(random_state)
+    thread_seeds = rng.integers(0,np.iinfo(np.uint32).max,size=n_samples)
+
+    cms = np.array(Parallel(n_jobs=n_jobs)(delayed(kfold_cv_cm)(X[i,:,:], y[i,:], model_class, model_kwargs, n_splits, 
+        random_state=thread_seeds[i]) for i in range(n_samples)))
+
+    return cms
 
 
 def pred_iv(values, q_range=0.95):
@@ -124,3 +136,13 @@ if __name__ == '__main__':
     y = rng.binomial(1,0.4,size=(100))
     cv_cm = kfold_cv_cm(X, y, LogisticRegression, model_kwargs={'penalty':'none'}, n_splits=5, random_state=None)
     print(cv_cm)
+
+
+    n_samples = 5
+    n_obs = 100
+    n_features = 2
+
+    X = rng.normal(size = (n_samples,n_obs,n_features))
+    y = rng.binomial(1,0.4,size=(n_samples,n_obs))
+    out = sim_kfold_cv_cm(X, y, LogisticRegression, model_kwargs={'penalty':'none'}, n_splits=5, n_jobs=2, random_state=1)
+    print(out)
