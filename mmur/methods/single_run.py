@@ -45,46 +45,6 @@ def bstrp_cm(cm, n_draws=1000, random_state=None):
     else:
         raise ValueError('Parameter ``cm`` is of wrong shape, should be of shape (4,) or (N,4)')
 
-def kfold_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=None):
-    """Performs k-fold cross validation and computes the confusion matrix for each split.
-
-    Parameters
-    ----------
-    X : np.ndarray of shape (n, k)
-        Array of feature values
-    y : np.ndarray of shape (n)
-        Contains true labels 0 or 1
-    model_class : object
-        sklearn class defining the model implemented, for instance LogisticRegression 
-    model_kwargs : dict, optional
-        contains the model parameters as keys and their values as dict values, by default {}
-    n_splits : int, optional
-        number of splits/folds to evaluate, by default 5
-    random_state : _type_, optional
-        _description_, by default None
-
-    Returns
-    -------
-    np.ndarray of shape (n_splits,4)
-        the confusion matrices corresponding to the splits
-    """
-    rng = np.random.default_rng(random_state)
-    fold_seed = rng.integers(low=0, high=np.iinfo(
-        np.uint32).max)  # TODO: seeding
-    kf = KFold(n_splits, shuffle=True, random_state=fold_seed)
-
-    cms = np.zeros((n_splits, 4), dtype=int)
-    for i, (train_index, test_index) in enumerate(kf.split(X)):
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
-
-        clf = model_class(**model_kwargs).fit(X_train, y_train)
-        cms[i, :] = confusion_matrix(y_test, clf.predict(X_test)).flatten()
-
-    return cms
-
-#TODO: K-fold cross val in parallel
-
 def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=None):
     n_obs = len(y)
     if n_obs % n_splits != 0:
