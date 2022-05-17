@@ -9,7 +9,7 @@ class DirichletMultinomialConfusionMatrix(ConfusionMatrixBase):
         """Initialise the class."""
         self.code = _dm_code
         self.prior_vars = ['theta']
-        self.post_vars = ['y_hat', 'theta_hat']
+        self.post_vars = ['y_hat']
         self.predictive_var = 'y_hat'
         # exclude transformed variables
         self._set_random_state(random_state)

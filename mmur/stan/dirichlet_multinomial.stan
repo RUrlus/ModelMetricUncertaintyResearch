@@ -16,4 +16,3 @@ model {
 generated quantities {
     int y_hat[4] = multinomial_rng(theta, total_count);
 }
-|
