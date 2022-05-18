@@ -45,6 +45,21 @@ def bstrp_cm(cm, n_draws=1000, random_state=None):
     else:
         raise ValueError('Parameter ``cm`` is of wrong shape, should be of shape (4,) or (N,4)')
 
+
+def bstrp_y(X,y,model,n_draws=1000,random_state=None):
+    """Perform bootstrap on the labels and return corresponding confusion matrices
+    """
+    n_obs = len(y)
+    rng = np.random.default_rng(random_state)
+    bs_indices = rng.choice(np.arange(n_obs),size=(n_draws,n_obs),replace=True) # create indices corresponding to bootstrap samples
+
+    X_bs = X[bs_indices] # retrieve data points to create bootstrap sample
+    y_bs = y[bs_indices]
+
+    y_pred = model.predict(X_bs)
+    cms = mmu.confusion_matrices(y=y_bs, y_hat=y_pred, obs_axis=0)
+    return cms
+
 def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=None):
     n_obs = len(y)
     if n_obs % n_splits != 0:
@@ -66,7 +81,6 @@ def kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, random_state=Non
 
         y_hat[i,:] = clf.predict(X_test)
         y_true[i,:] = y_test
-
     return mmu.confusion_matrices(y_true,y_hat,obs_axis=0)
 
 def sim_kfold_cv_cm(X, y, model_class, model_kwargs={}, n_splits=5, n_jobs=None, random_state=None):
