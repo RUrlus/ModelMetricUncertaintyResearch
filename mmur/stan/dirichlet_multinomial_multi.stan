@@ -19,6 +19,5 @@ model {
 }
 
 generated quantities {
-    vector[4] theta_hat = dirichlet_rng(rep_vector(alpha, 4));
     int y_hat[4] = multinomial_rng(theta, total_count);
 }
