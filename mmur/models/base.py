@@ -12,13 +12,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.utils import check_array
 
-from mmur.viz import _set_plot_style
 from mmu.metrics import confusion_matrix
 from mmu.metrics import binary_metrics_runs
 from mmu.metrics import binary_metrics_confusion_matrix
 from mmu.metrics.metrics import col_index as mtr_col_index
 from mmu.metrics.metrics import col_names as mtr_col_names
-from mmu.stats.stats import compute_hdi as _compute_hdi
+
+from mmur.viz import _set_plot_style
+from mmur.stats import compute_hdi as _compute_hdi
 
 _COLORS = _set_plot_style()
 
