@@ -18,7 +18,7 @@ from mmu.metrics import binary_metrics_runs
 from mmu.metrics import binary_metrics_confusion_matrix
 from mmu.metrics.metrics import col_index as mtr_col_index
 from mmu.metrics.metrics import col_names as mtr_col_names
-from mmu.stats.stats import compute_hdi as _compute_hdi
+from mmur.stats.hdi import compute_hdi as _compute_hdi
 
 _COLORS = _set_plot_style()
 
