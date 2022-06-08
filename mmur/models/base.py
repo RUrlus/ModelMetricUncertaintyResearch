@@ -13,9 +13,7 @@ import seaborn as sns
 from sklearn.utils import check_array
 
 from mmur.viz import _set_plot_style
-from mmu.metrics import confusion_matrix
-from mmu.metrics import binary_metrics_runs
-from mmu.metrics import binary_metrics_confusion_matrix
+import mmu
 from mmu.metrics.metrics import col_index as mtr_col_index
 from mmu.metrics.metrics import col_names as mtr_col_names
 from mmur.stats.hdi import compute_hdi as _compute_hdi
@@ -217,12 +215,12 @@ class ConfusionMatrixBase:
         if proba.ndim == 2 and proba.shape[1] > 1:
             if ensure_1d:
                 raise TypeError('``X`` should be 1 dimensional')
-            conf_mat, _ = binary_metrics_runs(
-                y=y, score=proba, threshold=threshold,
+            conf_mat, _ = mmu.confusion_matrices(
+                y=y, scores=proba, threshold=threshold,
             )
         else:
-            conf_mat = confusion_matrix(
-                y=y, score=proba, threshold=threshold
+            conf_mat = mmu.confusion_matrix(
+                y=y, scores=proba, threshold=threshold
             ).flatten()
         return conf_mat
 
@@ -315,7 +313,7 @@ class ConfusionMatrixBase:
                 raise RuntimeError(m)
             y_hat = self.sample_conf_mats_
 
-        self.sample_metrics_ = binary_metrics_confusion_matrix(y_hat, fill=fill)
+        self.sample_metrics_ = mmu.binary_metrics_confusion_matrices(y_hat, fill=fill)
         return self.sample_metrics_[:, metrics]
 
 
