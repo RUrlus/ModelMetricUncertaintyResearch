@@ -5,6 +5,7 @@ from mmur.generators.logistic_generator import LogisticGenerator
 from mmur.models.beta_binomial import BetaBinomialConfusionMatrix
 from mmur.models.dirichlet_multinomial import DirichletMultinomialConfusionMatrix
 from mmur.models.dirichlet_multinomial import DirichletMultinomialMultiConfusionMatrix
+from mmur import metrics
 
 __all__ = [
     'BetaBinomialConfusionMatrix',
@@ -12,5 +13,6 @@ __all__ = [
     'DirichletMultinomialMultiConfusionMatrix',
     'LogisticGenerator',
     'generators',
-    'viz'
+    'viz',
+    'metrics',
 ]

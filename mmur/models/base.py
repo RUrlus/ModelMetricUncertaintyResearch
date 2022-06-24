@@ -316,7 +316,6 @@ class ConfusionMatrixBase:
         self.sample_metrics_ = binary_metrics_confusion_matrices(y_hat, fill=fill)
         return self.sample_metrics_[:, metrics]
 
-
     def plot_posterior_trace(self):
         """Plot traces of posterior samples."""
         return az.plot_trace(self.fit_data_, var_names=self.post_vars)
