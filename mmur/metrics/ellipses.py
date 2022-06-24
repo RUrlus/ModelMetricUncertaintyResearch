@@ -19,10 +19,9 @@ def phat_PR(rec, prec, x_tp, x_fp, x_tn, x_fn):
     """
     n4 = x_tp + x_fp + x_tn + x_fn
     n3 = x_tp + x_fp + x_fn
-    alpha = (1-prec)/prec + (1-rec)/rec + 1
-    p_tp = (n3 / n4) * (1. / alpha)
-    p_fn = ((1-rec)/rec) * p_tp
-    p_fp = ((1-prec)/prec) * p_tp
+    p_tp = n3 / (n4*(1/rec + 1/prec - 1))  # p_tp hat
+    p_fn = ((1-rec)/rec) * p_tp  # remarq: rec >= epilson
+    p_fp = ((1-prec)/prec) * p_tp  # remarq: prec >= epilson
     p_tn = 1. - p_fn - p_fp - p_tp
     # prevent negative values to due machine level noise
     if isinstance(p_tn, np.ndarray):
@@ -34,10 +33,10 @@ def phat_PR(rec, prec, x_tp, x_fp, x_tn, x_fn):
 
 def phat_ROC(fpr, tpr, x_tp, x_fp, x_tn, x_fn):
     """Fit probability parameters of confusion matrix under the constraint of
-    fixed recall and precision
+    fixed FPR and TPR
     """
-    N = x_tp + x_fp + x_tn + x_fn
-    p_tp = (tpr*(x_fn+x_tp)) / N
+    n4 = x_tp + x_fp + x_tn + x_fn
+    p_tp = (tpr*(x_fn+x_tp)) / n4
     p_fn = (1-tpr)/tpr * p_tp
     p_fp = (fpr*(tpr-p_tp)) / tpr
     p_tn = 1. - p_fn - p_fp - p_tp
@@ -49,8 +48,9 @@ def phat_ROC(fpr, tpr, x_tp, x_fp, x_tn, x_fn):
     return p_tp, p_fp, p_tn, p_fn
 
 
-def nll_PR(fpr, tpr, x_tp, x_fp, x_tn, x_fn):
-    """Return -2logp of multinomial distribution fixed at certain recall and precision
+def nll(rec, prec, x_tp, x_fp, x_tn, x_fn, phat_fnc):
+    """Return -2logp of multinomial distribution fixed at certain point on the curve
+    either for precision-recall, or for ROC by choosing the corresponding phat_fnc()
 
     Two steps:
     1. Fit with fixed recall and precision
@@ -67,128 +67,70 @@ def nll_PR(fpr, tpr, x_tp, x_fp, x_tn, x_fn):
     nll_minimum = -2 * xlogy(x_tp, p_tp0) - 2 * xlogy(x_fp, p_fp0) - 2 * xlogy(x_fn, p_fn0) - 2 * xlogy(x_tn, p_tn0)
 
     # fit of x constrained to recall and precision
-    p_tp, p_fp, p_tn, p_fn = phat_PR(fpr, tpr, x_tp, x_fp, x_tn, x_fn)
+    p_tp, p_fp, p_tn, p_fn = phat_fnc(rec, prec, x_tp, x_fp, x_tn, x_fn)
     nll_value = -2 * xlogy(x_tp, p_tp) - 2 * xlogy(x_fp, p_fp) - 2 * xlogy(x_fn, p_fn) - 2 * xlogy(x_tn, p_tn)
 
     # return the difference
     return nll_value - nll_minimum
 
 
-def nll_ROC(rec, prec, x_tp, x_fp, x_tn, x_fn):
-    """Return -2logp of multinomial distribution fixed at certain recall and precision
-
-    Two steps:
-    1. Fit with fixed recall and precision
-    2. Fit with all probability parameters free
-
-    Return the difference in -2 log L
+def get_grid(X_nume, X_deno, Y_nume, Y_deno, nbins=100, epsilon=1e-4, n_sigma=6):
+    """For a point on the curve x=X_nume/X_deno and y=Y_nume/Y_deno,
+    make a rough estimate for the range of (x,y) values grid to scan.
+    Works for both (Recall,Precision) or (FPR,TPR).
     """
-    # optimal fit of x
-    n4 = x_tp + x_fp + x_tn + x_fn
-    p_fn0 = x_fn / n4
-    p_tp0 = x_tp / n4
-    p_fp0 = x_fp / n4
-    p_tn0 = x_tn / n4
-    nll_minimum = -2 * xlogy(x_tp, p_tp0) - 2 * xlogy(x_fp, p_fp0) - 2 * xlogy(x_fn, p_fn0) - 2 * xlogy(x_tn, p_tn0)
+    x = get_range_axis(X_nume, X_deno, nbins, epsilon, n_sigma)
+    y = get_range_axis(Y_nume, Y_deno, nbins, epsilon, n_sigma)
 
-    # fit of x constrained to recall and precision
-    p_tp, p_fp, p_tn, p_fn = phat_ROC(rec, prec, x_tp, x_fp, x_tn, x_fn)
-    nll_value = -2 * xlogy(x_tp, p_tp) - 2 * xlogy(x_fp, p_fp) - 2 * xlogy(x_fn, p_fn) - 2 * xlogy(x_tn, p_tn)
-
-    # return the difference
-    return nll_value - nll_minimum
-
-
-def get_PRgrid(x_tp, x_fp, x_fn, nbins=100, epsilon=1e-4):
-    """Make a rough estimate for the range of the precision-recall grid to scan
-    """
-
-    # epsilon to prevent division by zero at edge
-    # Note: true values recall=100% or prec=100% can only hit boundary if fn=0 or fp=0
-    # else clip max values of recall and precision
-    max_rec_clip = 0 if x_fn == 0 else epsilon
-    max_prec_clip = 0 if x_fp == 0 else epsilon
-
-    rec = x_tp / (x_tp + x_fn)
-    prec = x_tp / (x_tp + x_fp)
-
-    # get rough estimates of sigma_rec and sigma_precision
-    # for rec=0,1 the uncertainty formula gives zero, correct for this
-    if rec == 0:
-        rec_for_sigma = 1 / (x_tp + x_fn)
-    elif rec == 1:
-        rec_for_sigma = (x_tp + x_fn - 1) / (x_tp + x_fn)
-    else:
-        rec_for_sigma = rec
-    # for prec=0,1 the uncertainty formula gives zero, correct for this
-    if prec == 0:
-        prec_for_sigma = 1 / (x_tp + x_fp)
-    elif prec == 1:
-        prec_for_sigma = (x_tp + x_fp - 1) / (x_tp + x_fp)
-    else:
-        prec_for_sigma = prec
-    # rough estimates of sigma_rec and sigma_precision
-    sigma_rec = np.sqrt((rec_for_sigma*(1-rec_for_sigma))/(x_tp + x_fn))
-    sigma_prec = np.sqrt((prec_for_sigma*(1-prec_for_sigma))/(x_tp + x_fp))
-
-    # ranges of P and R to scan
-    rec_max = min(rec + 6 * sigma_rec, 1 - max_rec_clip)
-    rec_min = max(rec - 7 * sigma_rec, epsilon)
-    prec_max = min(prec + 6 * sigma_prec, 1 - max_prec_clip)
-    prec_min = max(prec - 7 * sigma_prec, epsilon)
-
-    # make PR grid to scan
-    rx = np.linspace(rec_min, rec_max, nbins)
-    py = np.linspace(prec_min, prec_max, nbins)
-    RX, PY = np.meshgrid(rx, py)
+    RX, PY = np.meshgrid(x, y)
 
     return RX, PY
 
 
-def get_ROCgrid(x_tp, x_fp, x_tn, x_fn, nbins=100, epsilon=1e-4):
-    """Make a rough estimate for the range of the precision-recall grid to scan
+def get_range_axis(nume, deno, nbins, epsilon, n_sigma):
     """
+    Works for all of those: Recall, Precision, FPR and TPR = nume/deno
 
-    # epsilon to prevent division by zero at edge
-    # Note: true values recall=100% or prec=100% can only hit boundary if fn=0 or fp=0
-    # else clip max values of recall and precision
-    max_FPR_clip = 0 if x_tn == 0 else epsilon
-    max_TPR_clip = 0 if x_fn == 0 else epsilon
+    FPR       = x_fp / (x_fp + x_tn) # x-axis
+    TPR       = x_tp / (x_tp + x_fn) # y-axis == recall
+    recall    = x_tp / (x_tp + x_fn) # x-axis
+    precision = x_tp / (x_tp + x_fp) # y-avis
 
-    FPR = x_fp / (x_fp + x_tn)  # x
-    TPR = x_tp / (x_tp + x_fn)  # y, same as rec
+    # Sigma estimation based on the covariance matrix first-order approximation:
+    sigma FPR       = (x_fp*x_tn) / (x_fp + x_tn)**3
+    sigma TPR       = (x_tp*x_fn) / (x_tp + x_fn)**3
+    sigma recall    = (x_tp*x_fn) / (x_tp + x_fn)**3 == TPR
+    sigma precision = (x_tp*x_fp) / (x_tp + x_fp)**3
+    In all these case we can notice that:
+    sigma XXXX      = (nume * (deno-nume)) / deno**3
 
-    # get rough estimates of sigma_FPR and sigma_TPR
-    # for FPR=0,1 the uncertainty formula gives zero, correct for this
-    if FPR == 0:
-        FPR_for_sigma = 1 / (x_fp + x_tn)
-    elif FPR == 1:
-        FPR_for_sigma = (x_fp + x_tn - 1) / (x_fp + x_tn)
-    else:
-        FPR_for_sigma = FPR
-    # for rec=0,1 the uncertainty formula gives zero, correct for this
-    if TPR == 0:
-        TPR_for_sigma = 1 / (x_tp + x_fn)
-    elif TPR == 1:
-        TPR_for_sigma = (x_tp + x_fn - 1) / (x_tp + x_fn)
-    else:
-        TPR_for_sigma = TPR
-    # rough estimates of sigma_FPR and sigma_TPR
-    sigma_FPR = np.sqrt((FPR_for_sigma*(1-FPR_for_sigma))/(x_fp + x_tn))
-    sigma_TPR = np.sqrt((TPR_for_sigma*(1-TPR_for_sigma))/(x_tp + x_fn))
+    Remark: if you observer at least one fp, precision cannot be 100%
+    """
+    V = nume / deno
 
-    # ranges of P and R to scan
-    FPR_max = min(FPR + 6 * sigma_FPR, 1 - max_FPR_clip)
-    FPR_min = max(FPR - 7 * sigma_FPR, epsilon)
-    TPR_max = min(TPR + 6 * sigma_TPR, 1 - max_TPR_clip)
-    TPR_min = max(TPR - 7 * sigma_TPR, epsilon)
+    # Get sigma estimation based on the covariance matrix first-order approximation
+    p1 = nume
+    p2 = deno-nume
+    # If we get one the term of the product to be zero (like x_fp * x_tn)
+    # we set it in order to have at least one x_fp, or x_tn, so that we have a non-zero sigma
+    if p1 == 0:
+        p1 = 1
+    if p2 == 0:
+        p2 = 1
+    sigma_V = np.sqrt((p1 * p2) / deno**3)
 
-    # make PR grid to scan
-    rx = np.linspace(FPR_min, FPR_max, nbins)
-    py = np.linspace(TPR_min, TPR_max, nbins)
-    RX, PY = np.meshgrid(rx, py)
+    # We intoduce an epsilon to prevent division by zero at the edge because in phat() we have some divisions by precision, recall and TPR
+    # but most importantly, we need an epsilon to have nice contour plots: (for X and Y)
+    # if X == 1, its means that we can have a grid including value 1, and the contour will have finite values
+    # if X <  1, its means that the probability to have value 1 is 0, and therefore the nll is infinity,
+    #            and therefore we have a plotting issue for the contour, so we set it to 1-epsilon so the contour knows how to extrapolate
+    max_V_clip = 1 if V == 1 else 1-epsilon
 
-    return RX, PY
+    # Ranges of values for the axis to scan, with clipping to not draw outside of the square (0,1)
+    V_max = min(V + n_sigma * sigma_V, max_V_clip)  # max_V_clip to have nice contours
+    V_min = max(V - n_sigma * sigma_V, epsilon)  # epsilon to prevent division by 0
+
+    return np.linspace(V_max, V_min, nbins)
 
 
 def tail_uncertainty(y_true, y_prob, thresholds, FP, FN):
@@ -382,8 +324,16 @@ def plot_precision_recall_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True,
             else:
                 color = 'C0'
 
-            RX, PY = get_PRgrid(x_tp, x_fp, x_fn)
-            chi2 = nll_PR(RX, PY, x_tp, x_fp, x_tn, x_fn)
+            # x-axis: rec = x_tp / (x_tp + x_fn)
+            X_nume = x_tp
+            X_deno = x_tp + x_fn
+
+            # y-axis: prec = x_tp / (x_tp + x_fp)  # same as TPR
+            Y_nume = x_tp
+            Y_deno = x_tp + x_fp
+
+            RX, PY = get_grid(X_nume, X_deno, Y_nume, Y_deno)
+            chi2 = nll(RX, PY, x_tp, x_fp, x_tn, x_fn, phat_PR)
             CS = ax.contour(RX, PY, chi2, levels=[scale**2], alpha=0.50, colors=color)
 
     # Plot line after the contours/ellipses to see it well
@@ -453,8 +403,16 @@ def plot_ROC_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True, lim=1.0, met
             else:
                 color = 'C0'
 
-            RX, PY = get_ROCgrid(x_tp, x_fp, x_tn, x_fn)
-            chi2 = nll_ROC(RX, PY, x_tp, x_fp, x_tn, x_fn)
+            # x-axis: FPR = x_fp / (x_fp + x_tn)
+            X_nume = x_fp
+            X_deno = x_fp + x_tn
+
+            # y-axis: TPR = x_tp / (x_tp + x_fn)  # same as rec
+            Y_nume = x_tp
+            Y_deno = x_tp + x_fn
+
+            RX, PY = get_grid(X_nume, X_deno, Y_nume, Y_deno)
+            chi2 = nll(RX, PY, x_tp, x_fp, x_tn, x_fn, phat_ROC)
             CS = ax.contour(RX, PY, chi2, levels=[scale**2], alpha=0.50, colors=color)
 
     # Plot line after the contours/ellipses to see it well
