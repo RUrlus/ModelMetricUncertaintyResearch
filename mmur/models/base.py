@@ -12,13 +12,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.utils import check_array
 
+from mmur.viz import _set_plot_style
 from mmu.metrics import confusion_matrix
 from mmu.metrics import binary_metrics_runs
-from mmu.metrics import binary_metrics_confusion_matrix
-from mmu.metrics.metrics import col_index as mtr_col_index
-from mmu.metrics.metrics import col_names as mtr_col_names
-
-from mmur.viz import _set_plot_style
+from mmu.metrics import binary_metrics_confusion_matrices
+from mmu.metrics import col_index as mtr_col_index
+from mmu.metrics import col_names as mtr_col_names
 from mmur.stats import compute_hdi as _compute_hdi
 
 _COLORS = _set_plot_style()
@@ -219,12 +218,10 @@ class ConfusionMatrixBase:
             if ensure_1d:
                 raise TypeError('``X`` should be 1 dimensional')
             conf_mat, _ = binary_metrics_runs(
-                y=y, score=proba, threshold=threshold,
+                y=y, scores=proba, threshold=threshold,
             )
         else:
-            conf_mat = confusion_matrix(
-                y=y, score=proba, threshold=threshold
-            ).flatten()
+            conf_mat = confusion_matrix(y=y, scores=proba, threshold=threshold).flatten()
         return conf_mat
 
     def compute_metrics(self, X=None, metrics=None, fill=0.0):
@@ -316,9 +313,8 @@ class ConfusionMatrixBase:
                 raise RuntimeError(m)
             y_hat = self.sample_conf_mats_
 
-        self.sample_metrics_ = binary_metrics_confusion_matrix(y_hat, fill=fill)
+        self.sample_metrics_ = binary_metrics_confusion_matrices(y_hat, fill=fill)
         return self.sample_metrics_[:, metrics]
-
 
     def plot_posterior_trace(self):
         """Plot traces of posterior samples."""
