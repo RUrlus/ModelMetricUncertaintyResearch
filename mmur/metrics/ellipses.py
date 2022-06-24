@@ -74,22 +74,22 @@ def nll(rec, prec, x_tp, x_fp, x_tn, x_fn, phat_fnc):
     return nll_value - nll_minimum
 
 
-def get_grid(X_nume, X_deno, Y_nume, Y_deno, nbins=100, epsilon=1e-4, n_sigma=6):
-    """For a point on the curve x=X_nume/X_deno and y=Y_nume/Y_deno,
+def get_grid(X_term1, X_term2, Y_term1, Y_term2, nbins=100, epsilon=1e-4, n_sigma=6):
+    """For a point on the curve x=X_term1/(X_term1+X_term2) and y=Y_term1/(Y_term1+Y_term2),
     make a rough estimate for the range of (x,y) values grid to scan.
     Works for both (Recall,Precision) or (FPR,TPR).
     """
-    x = get_range_axis(X_nume, X_deno, nbins, epsilon, n_sigma)
-    y = get_range_axis(Y_nume, Y_deno, nbins, epsilon, n_sigma)
+    x = get_range_axis(X_term1, X_term2, nbins, epsilon, n_sigma)
+    y = get_range_axis(Y_term1, Y_term2, nbins, epsilon, n_sigma)
 
     RX, PY = np.meshgrid(x, y)
 
     return RX, PY
 
 
-def get_range_axis(nume, deno, nbins, epsilon, n_sigma):
+def get_range_axis(term1, term2, nbins, epsilon, n_sigma):
     """
-    Works for all of those: Recall, Precision, FPR and TPR = nume/deno
+    Works for all of those: Recall, Precision, FPR and TPR = term1/(term1+term2)
 
     FPR       = x_fp / (x_fp + x_tn) # x-axis
     TPR       = x_tp / (x_tp + x_fn) # y-axis == recall
@@ -102,22 +102,20 @@ def get_range_axis(nume, deno, nbins, epsilon, n_sigma):
     sigma recall    = (x_tp*x_fn) / (x_tp + x_fn)**3 == TPR
     sigma precision = (x_tp*x_fp) / (x_tp + x_fp)**3
     In all these case we can notice that:
-    sigma XXXX      = (nume * (deno-nume)) / deno**3
+    sigma XXXX      = (term1 * term2) / (term1 + term2)**3
 
     Remark: if you observer at least one fp, precision cannot be 100%
     """
-    V = nume / deno
+    V = term1/(term1+term2)
 
     # Get sigma estimation based on the covariance matrix first-order approximation
-    p1 = nume
-    p2 = deno-nume
     # If we get one the term of the product to be zero (like x_fp * x_tn)
     # we set it in order to have at least one x_fp, or x_tn, so that we have a non-zero sigma
-    if p1 == 0:
-        p1 = 1
-    if p2 == 0:
-        p2 = 1
-    sigma_V = np.sqrt((p1 * p2) / deno**3)
+    if term1 == 0:
+        term1 = 1
+    if term2 == 0:
+        term2 = 1
+    sigma_V = np.sqrt((term1 * term2) / (term1+term2)**3)
 
     # We intoduce an epsilon to prevent division by zero at the edge because in phat() we have some divisions by precision, recall and TPR
     # but most importantly, we need an epsilon to have nice contour plots: (for X and Y)
@@ -325,14 +323,14 @@ def plot_precision_recall_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True,
                 color = 'C0'
 
             # x-axis: rec = x_tp / (x_tp + x_fn)
-            X_nume = x_tp
-            X_deno = x_tp + x_fn
+            X_term1 = x_tp
+            X_term2 = x_fn
 
             # y-axis: prec = x_tp / (x_tp + x_fp)  # same as TPR
-            Y_nume = x_tp
-            Y_deno = x_tp + x_fp
+            Y_term1 = x_tp
+            Y_term2 = x_fp
 
-            RX, PY = get_grid(X_nume, X_deno, Y_nume, Y_deno)
+            RX, PY = get_grid(X_term1, X_term2, Y_term1, Y_term2)
             chi2 = nll(RX, PY, x_tp, x_fp, x_tn, x_fn, phat_PR)
             CS = ax.contour(RX, PY, chi2, levels=[scale**2], alpha=0.50, colors=color)
 
@@ -404,14 +402,14 @@ def plot_ROC_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True, lim=1.0, met
                 color = 'C0'
 
             # x-axis: FPR = x_fp / (x_fp + x_tn)
-            X_nume = x_fp
-            X_deno = x_fp + x_tn
+            X_term1 = x_fp
+            X_term2 = x_tn
 
             # y-axis: TPR = x_tp / (x_tp + x_fn)  # same as rec
-            Y_nume = x_tp
-            Y_deno = x_tp + x_fn
+            Y_term1 = x_tp
+            Y_term2 = x_fn
 
-            RX, PY = get_grid(X_nume, X_deno, Y_nume, Y_deno)
+            RX, PY = get_grid(X_term1, X_term2, Y_term1, Y_term2)
             chi2 = nll(RX, PY, x_tp, x_fp, x_tn, x_fn, phat_ROC)
             CS = ax.contour(RX, PY, chi2, levels=[scale**2], alpha=0.50, colors=color)
 
