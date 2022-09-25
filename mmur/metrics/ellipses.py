@@ -356,7 +356,7 @@ def plot_precision_recall_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True,
     ax.set_title(f'Precision-Recall Curve ±{norm_nstd}σ  {method}')
     # ax.legend(loc="lower left")
 
-    return fig
+    return fig, ax
 
 
 def plot_ROC_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True, lim=1.0, method='contour'):
@@ -435,4 +435,4 @@ def plot_ROC_curve_with_CI(y_true, y_prob, norm_nstd=1, tails=True, lim=1.0, met
     ax.set_title(f'ROC Curve ±{norm_nstd}σ  {method}')
     # ax.legend(loc="lower left")
 
-    return fig
+    return fig, ax
