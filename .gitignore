@@ -153,3 +153,5 @@ dmypy.json
 
 # exclude version file
 *version.py
+
+.DS_Store
